@@ -92,9 +92,9 @@ def main():
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(script_dir, "eda_raw_series.png"), dpi=200)
+    plt.savefig(os.path.join(script_dir, "图1 原始位移时序.png"), dpi=200)
     plt.show()
-    print("[图1] 原始位移时序 → eda_raw_series.png")
+    print("[图1] 原始位移时序 → 图1 原始位移时序.png")
 
     # 图2：速度分布直方图 + 时序
     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
@@ -122,9 +122,9 @@ def main():
     axes[1].grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(script_dir, "eda_velocity.png"), dpi=200)
+    plt.savefig(os.path.join(script_dir, "图2 速度分布与阈值.png"), dpi=200)
     plt.show()
-    print("[图2] 速度分析 → eda_velocity.png")
+    print("[图2] 速度分析 → 图2 速度分布与阈值.png")
 
     # 图3：加速度水平
     plt.figure(figsize=(14, 4))
@@ -136,9 +136,9 @@ def main():
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(script_dir, "eda_acceleration.png"), dpi=200)
+    plt.savefig(os.path.join(script_dir, "图3 加速度水平.png"), dpi=200)
     plt.show()
-    print("[图3] 加速度水平 → eda_acceleration.png")
+    print("[图3] 加速度水平 → 图3 加速度水平.png")
 
     # 图4：原始 vs 清洗后对比
     plt.figure(figsize=(14, 6))
@@ -150,9 +150,9 @@ def main():
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(script_dir, "eda_raw_vs_clean.png"), dpi=200)
+    plt.savefig(os.path.join(script_dir, "图4 清洗前后对比.png"), dpi=200)
     plt.show()
-    print("[图4] 原始 vs 清洗后 → eda_raw_vs_clean.png")
+    print("[图4] 原始 vs 清洗后 → 图4 清洗前后对比.png")
 
     print("\n" + "=" * 55)
     print("EDA 完成！共生成 4 张图表")

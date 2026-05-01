@@ -59,10 +59,10 @@ def plot_fitting_curve(stages, t_full, d_full, idx1, t1, idx2, t2, save_dir):
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    path = os.path.join(save_dir, 'stage_fitting_curve.png')
+    path = os.path.join(save_dir, '图6 三段拟合曲线.png')
     plt.savefig(path, dpi=300)
     plt.show()
-    print(f"[图1] 三段拟合曲线 → {path}")
+    print(f"[图6] 三段拟合曲线 → {path}")
 
 
 def plot_residuals(stages, save_dir):
@@ -79,15 +79,15 @@ def plot_residuals(stages, save_dir):
         plt.axhline(0, color='k', linestyle='-')
         plt.ylabel('Residual (mm)', fontsize=10)
         plt.title(f'Stage {label} ({labels[label]}) Residuals '
-                  f'(R²={s["r2"]:.4f}, RMSE={s["rmse"]:.3f}mm)')
+                  f'(R^2={s["r2"]:.4f}, RMSE={s["rmse"]:.3f}mm)')
         plt.grid(True, alpha=0.3)
 
     plt.xlabel('Time (days)', fontsize=12)
     plt.tight_layout()
-    path = os.path.join(save_dir, 'stage_residuals.png')
+    path = os.path.join(save_dir, '图7 各阶段残差.png')
     plt.savefig(path, dpi=300)
     plt.show()
-    print(f"[图2] 各阶段残差 → {path}")
+    print(f"[图7] 各阶段残差 → {path}")
 
 
 def plot_velocity_transition(d, t, dt, idx1, t1, idx2, t2, save_dir):
@@ -118,10 +118,10 @@ def plot_velocity_transition(d, t, dt, idx1, t1, idx2, t2, save_dir):
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    path = os.path.join(save_dir, 'velocity_transition.png')
+    path = os.path.join(save_dir, '图5 速度过渡与节点.png')
     plt.savefig(path, dpi=300)
     plt.show()
-    print(f"[图3] 速度过渡曲线 → {path}")
+    print(f"[图5] 速度过渡曲线 → {path}")
 
 
 def plot_all(save_dir=None):
