@@ -12,7 +12,9 @@ clear; clc; close all;
 THRESH_A_B = 100.0;          % A/B 单序列异常阈值（MAD 倍数）
 WIN_D      = 500;          % D 序列移动窗口宽度（点数）
 THRESH_D   = 22.0;         % D 序列 MAD 倍数阈值
-DATA_FILE  = 'D:\project\pythonProject\MathModel\51MathModel2\Q1\Attachment 1.xlsx';
+% 自动获取脚本所在目录，支持相对路径
+script_dir = fileparts(mfilename('fullpath'));
+DATA_FILE  = fullfile(script_dir, 'Attachment 1.xlsx');
 OUT_FILE   = 'Filtered 1.xlsx';
 % =============================================
 

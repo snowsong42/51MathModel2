@@ -7,7 +7,9 @@ DATA_FILE = 'Filtered 1.xlsx';
 % =============================================
 
 %% 1. 读取数据
-filename = fullfile('D:\project\pythonProject\MathModel\51MathModel2\Q1', DATA_FILE);
+% 自动获取脚本所在目录，支持相对路径
+script_dir = fileparts(mfilename('fullpath'));
+filename = fullfile(script_dir, DATA_FILE);
 data = readtable(filename, 'VariableNamingRule', 'preserve');
 
 % 时间列

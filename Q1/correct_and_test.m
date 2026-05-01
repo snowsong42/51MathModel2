@@ -6,7 +6,9 @@
 clear; clc;
 
 %% ================= 设置 =================
-DATA_FILE = 'D:\project\pythonProject\MathModel\51MathModel2\Q1\Filtered 1.xlsx';
+% 自动获取脚本所在目录，支持相对路径
+script_dir = fileparts(mfilename('fullpath'));
+DATA_FILE = fullfile(script_dir, 'Filtered 1.xlsx');
 K = 5;                         % 交叉验证折数（可调，推荐5或10）
 % 表1.1 待校正的5个原始A值
 x_verify = [7.132, 18.526, 84.337, 123.554, 167.667];
