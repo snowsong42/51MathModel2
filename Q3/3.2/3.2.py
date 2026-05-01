@@ -72,44 +72,17 @@ for key, y in filled_data.items():
         y_den = np.round(y_den).astype(int)
     denoised_data[key] = y_den
 
-# ==================== 5. 计算残差并检测异常 ====================
-def detect_outliers_scaled(residuals, data_std_val, k=3.0):
-    """
-    基于MAD检测异常值 (改进：用数据标准差归一化残差)
-    residuals: 残差数组
-    data_std_val: 原始数据的标准差
-    k: 阈值倍数
-    """
-    if len(residuals) == 0 or data_std_val == 0:
-        return np.array([], dtype=bool)
-    # 关键改进：残差除以数据标准差，使阈值对所有变量尺度一致
-    normalized = residuals / data_std_val
-    median = np.median(normalized)
-    mad = np.median(np.abs(normalized - median))
+# ==================== 改进的异常检测（统一用残差MAD） ====================
+def detect_outliers_by_residual(y_filled, y_clean, k=4.0):
+    """基于残差的MAD异常检测，适用于所有变量"""
+    resid = y_filled - y_clean
+    median = np.median(resid)
+    mad = np.median(np.abs(resid - median))
     if mad == 0:
-        threshold = k * np.std(normalized)
-    else:
-        threshold = k * mad
-    return np.abs(normalized - median) > threshold
-
-def detect_outliers_by_diff(signal, k=4.0):
-    """
-    基于一阶差分（变化率）检测异常
-    对趋势性强的变量（孔隙水压力、位移）更有效
-    异常 = 相邻时间点间变化量异常大
-    """
-    diff = np.diff(signal)
-    # 用MAD检测差分序列的异常
-    median = np.median(diff)
-    mad = np.median(np.abs(diff - median))
-    if mad == 0:
-        mad = np.std(diff)
-    flags_diff = np.abs(diff - median) > k * mad
-    # 差分比原序列少1个点，对齐：某点异常若其前后差分任一异常
-    flags = np.zeros(len(signal), dtype=bool)
-    flags[:-1] |= flags_diff  # t→t+1的跳变标记t
-    flags[1:]  |= flags_diff  # 也标记t+1
-    return flags
+        # 极端情况：残差全为0，没有异常
+        return np.zeros(len(resid), dtype=bool)
+    threshold = k * mad
+    return np.abs(resid - median) > threshold
 
 # 存储每个变量的异常标记
 outlier_flags = {}
@@ -117,14 +90,11 @@ outlier_counts = {}
 total_length = None
 
 for key in ['a','b','c','d','e']:
-    raw_filled = filled_data[key]
-    clean_signal = denoised_data[key]
-    residuals = raw_filled - clean_signal
-    # 对趋势性强的变量(b/d/e)使用差分检测，对波动性变量(a/c)使用残差检测
-    if key in ['b', 'd', 'e']:
-        flags = detect_outliers_by_diff(clean_signal, k=4.0)
-    else:
-        flags = detect_outliers_scaled(residuals, data_std[key], k=3.0)
+    y_filled = filled_data[key]
+    y_clean = denoised_data[key]
+    # 对微震事件数使用稍大的阈值，避免正常波动被标异常
+    k_value = 5.0 if key == 'c' else 4.0
+    flags = detect_outliers_by_residual(y_filled, y_clean, k=k_value)
     outlier_flags[key] = flags
     outlier_counts[key] = int(np.sum(flags))
     total_length = len(flags)
