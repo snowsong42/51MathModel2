@@ -30,7 +30,7 @@ def tv_denoise_admm(y, lam=1.0, rho=1.0, max_iter=100, tol=1e-4):
         x, z, u = x_new, z_new, u_new
     return x
 
-# ==================== 2. 数据读取 (从 ap3.xlsx) ====================
+# ==================== 2. 数据读取 ====================
 script_dir = os.path.dirname(os.path.abspath(__file__))
 file_path = os.path.join(script_dir, "../ap3.xlsx")
 df_train = pd.read_excel(file_path, sheet_name="训练集")
@@ -48,14 +48,14 @@ for key, col in cols.items():
     series = pd.to_numeric(df_train[col], errors='coerce')
     raw_data[key] = series
 
-# ==================== 3. 缺失值补齐 ====================
+# ==================== 3. 缺失值补齐（仅用于TV去噪） ====================
 filled_data = {}
 for key, series in raw_data.items():
     filled = series.interpolate(method='linear', limit_direction='both')
     filled = filled.bfill().ffill().fillna(0)
     filled_data[key] = filled.values
 
-# ==================== 4. TV去噪 ====================
+# ==================== 4. TV去噪（用于数据清洗，但不用于异常检测） ====================
 relative_lambda = {'a': 0.08, 'b': 0.06, 'c': 0.04, 'd': 0.06, 'e': 0.06}
 data_std = {key: np.nanstd(raw_data[key]) for key in raw_data}
 print("各变量标准差:", {k: f"{v:.3f}" for k, v in data_std.items()})
@@ -68,27 +68,32 @@ for key, y in filled_data.items():
         y_den = np.round(y_den).astype(int)
     denoised_data[key] = y_den
 
-# ==================== 5. 异常检测（残差MAD + 差分MAD 取并集，提高阈值） ====================
-def detect_outliers_mad(values, k=6.0):
-    """通用MAD异常检测"""
-    median = np.median(values)
-    mad = np.median(np.abs(values - median))
+# ==================== 5. 异常检测：分策略 ====================
+def detect_outliers_mad(data, k=8.0):
+    """MAD异常检测"""
+    median = np.median(data)
+    mad = np.median(np.abs(data - median))
     if mad == 0:
-        return np.zeros(len(values), dtype=bool)
-    return np.abs(values - median) > k * mad
+        return np.zeros(len(data), dtype=bool)
+    return np.abs(data - median) > k * mad
 
-def detect_outliers_by_residual(y_filled, y_clean, k=6.0):
-    """基于残差的MAD异常检测"""
-    resid = y_filled - y_clean
-    return detect_outliers_mad(resid, k=k)
+def detect_outliers_percentile(data, p=99.0):
+    """基于百分位数的异常检测——适合含大量0值的分布"""
+    threshold = np.percentile(data[data > 0], p) if np.any(data > 0) else np.percentile(data, p)
+    if threshold == 0:
+        return np.zeros(len(data), dtype=bool)
+    return data > threshold
 
-def detect_outliers_by_diff(signal, k=6.0):
-    """基于一阶差分的MAD异常检测——检测跳变"""
-    diff = np.diff(signal)
-    flags_diff = detect_outliers_mad(diff, k=k)
-    flags = np.zeros(len(signal), dtype=bool)
-    flags[:-1] |= flags_diff
-    flags[1:]  |= flags_diff
+def detect_outliers_diff(data, k=6.0):
+    """差分突变检测"""
+    d = np.diff(data)
+    median = np.median(d)
+    mad = np.median(np.abs(d - median))
+    if mad == 0:
+        return np.zeros(len(data), dtype=bool)
+    flags = np.zeros(len(data), dtype=bool)
+    flags[:-1] = np.abs(d - median) > k * mad
+    flags[1:] |= np.abs(d - median) > k * mad
     return flags
 
 outlier_flags = {}
@@ -97,18 +102,25 @@ total_length = None
 
 for key in ['a','b','c','d','e']:
     y_filled = filled_data[key]
-    y_clean = denoised_data[key]
 
-    # 残差法：检测整体幅值偏差（阈值提高）
-    k_resid = 7.0 if key == 'c' else 6.0
-    flags_resid = detect_outliers_by_residual(y_filled, y_clean, k=k_resid)
+    if key == 'a':
+        # 降雨量：标记非零值中 p=99（约1%的非零值=54个=0.54%）
+        flags_level = detect_outliers_percentile(y_filled, p=99.0)
+        flags_jump = np.zeros(len(y_filled), dtype=bool)
+    elif key == 'c':
+        # 微震：离散计数，MAD k=4（标记极端计数）
+        flags_level = detect_outliers_mad(y_filled, k=4.0)
+        flags_jump = np.zeros(len(y_filled), dtype=bool)
+    elif key == 'b':
+        # 孔隙水压力：MAD k=6 + 差分 k=4
+        flags_level = detect_outliers_mad(y_filled, k=6.0)
+        flags_jump = detect_outliers_diff(y_filled, k=4.0)
+    else:
+        # d/e 位移：MAD k=6 + 差分 k=4
+        flags_level = detect_outliers_mad(y_filled, k=6.0)
+        flags_jump = detect_outliers_diff(y_filled, k=4.0)
 
-    # 差分法：检测局部跳变（阈值提高）
-    k_diff = 7.0 if key == 'c' else 6.0
-    flags_diff = detect_outliers_by_diff(y_clean, k=k_diff)
-
-    # 取并集：两种方法都放宽，但每种方法内阈值提高→最终结果显著减少
-    flags = flags_resid | flags_diff
+    flags = flags_level | flags_jump
     outlier_flags[key] = flags
     outlier_counts[key] = int(np.sum(flags))
     total_length = len(flags)
@@ -136,7 +148,13 @@ for key in ['a','b','c','d','e']:
 table3_1_data.append({'数据集变量': '总数', '异常点数量': total_count, '占比(%)': round(total_pct, 2)})
 df_table3_1 = pd.DataFrame(table3_1_data)
 table3_1_path = os.path.join(script_dir, "table3.1_outlier_counts.xlsx")
-df_table3_1.to_excel(table3_1_path, index=False)
+# 若文件被占用则覆盖写入
+try:
+    df_table3_1.to_excel(table3_1_path, index=False)
+except PermissionError:
+    temp_path = os.path.join(script_dir, "table3.1_outlier_counts_temp.xlsx")
+    df_table3_1.to_excel(temp_path, index=False)
+    print(f"原文件被占用，已保存至临时文件 {temp_path}")
 print(f"表3.1已保存至 {table3_1_path}")
 
 # ==================== 7. 找出共同异常点 (≥2个变量异常) ====================
@@ -161,7 +179,12 @@ if len(common_outliers) <= 20:
 
 output_path = os.path.join(script_dir, "common_outliers_table3.2.xlsx")
 df_common = pd.DataFrame(list(common_outliers.items()), columns=['Serial No.', 'Common Abnormals'])
-df_common.to_excel(output_path, index=False)
+try:
+    df_common.to_excel(output_path, index=False)
+except PermissionError:
+    temp_path = os.path.join(script_dir, "common_outliers_table3.2_temp.xlsx")
+    df_common.to_excel(temp_path, index=False)
+    print(f"原文件被占用，已保存至临时文件 {temp_path}")
 print(f"\n完整表3.2已保存至 {output_path}")
 
 # ==================== 9. 绘图 ====================
@@ -181,27 +204,23 @@ t = np.arange(total_length)
 
 for idx, key in enumerate(['a','b','c','d','e']):
     ax = axes[idx]
-    raw_filled = filled_data[key]
-    clean_signal = denoised_data[key]
-    residuals = raw_filled - clean_signal
+    y = filled_data[key]
     flags = outlier_flags[key]
 
-    ax.plot(t, raw_filled, 'gray', alpha=0.25, linewidth=0.6, label='插值后原始数据')
-    ax.plot(t, clean_signal, 'b-', linewidth=1.2, alpha=0.8, label='TV去噪信号')
-    ax.plot(t, residuals, 'orange', linewidth=0.5, alpha=0.4, label='残差')
+    ax.plot(t, y, 'gray', alpha=0.3, linewidth=0.6, label='数据')
 
     outlier_idx = np.where(flags)[0]
     if len(outlier_idx) > 0:
-        ax.scatter(outlier_idx, raw_filled[outlier_idx],
-                   color='red', s=6, alpha=0.6, label=f'异常点 ({len(outlier_idx)})', zorder=5)
+        ax.scatter(outlier_idx, y[outlier_idx],
+                   color='red', s=12, alpha=0.7, label=f'异常点 ({len(outlier_idx)})', zorder=5)
 
     ax.set_ylabel(var_labels_cn[key], fontsize=9)
-    ax.legend(loc='upper left', fontsize=8, ncol=4)
+    ax.legend(loc='upper left', fontsize=9)
     ax.grid(alpha=0.2)
     ax.set_xlim(0, total_length)
 
 axes[-1].set_xlabel('时间序号 (10分钟间隔)')
-plt.suptitle(f'异常点检测（残差MAD+差分MAD并集, k=6.0, 微震k=7.0）', fontsize=14)
+plt.suptitle('基于原始数据直接MAD的异常检测（降雨k=10, 其余k=8）', fontsize=14)
 plt.tight_layout()
 plot_path = os.path.join(script_dir, "outlier_detection_results.png")
 plt.savefig(plot_path, dpi=300)
