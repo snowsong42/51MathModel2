@@ -2,16 +2,28 @@
 三段式形变建模与检验
 根据识别出的阶段节点，将位移时序分为三阶段，分别建模并计算指标
 对标 Q1 correct_and_test.m 的建模+检验部分
+输出：
+  - 图6 三段拟合曲线.png  原始位移 + 分段拟合曲线 + 节点标记
+  - 图7 各阶段残差.png    三阶段残差分布
+  - 命令窗口：各阶段模型参数与评估指标
 """
 import os
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+plt.ion()
 from sklearn.metrics import r2_score, mean_squared_error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 
+# ===== matplotlib 显示设置 =====
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']  # 中文字体 + 英文字体fallback
+plt.rcParams['axes.unicode_minus'] = False           # 修复负号显示为方块
 
 def _load_clean_data():
     """读取清洗后数据"""
@@ -128,13 +140,78 @@ def _print_stage(label, s):
     print(f"    Mean velocity: {s['v_mean']:.4f} mm/h")
 
 
+def plot_fitting_curve(stages, t_full, d_full, idx1, t1, idx2, t2, save_dir):
+    """图6：原始位移 + 分段拟合曲线 + 节点标记"""
+    plt.figure(figsize=(12, 6))
+    plt.plot(t_full / 24, d_full, 'k-', linewidth=0.6, alpha=0.7,
+             label='Filtered displacement')
+
+    colors = {'I': 'b', 'II': 'g', 'III': 'r'}
+    for label in ['I', 'II', 'III']:
+        s = stages[label]
+        plt.plot(s['t'] / 24, s['d_pred'], f'{colors[label]}--',
+                 linewidth=2, label=f'Stage {label} ({s["model"]} fit)')
+
+    # 标记节点
+    if idx1:
+        plt.axvline(x=t1 / 24, color='blue', linestyle=':', linewidth=1.5,
+                    label=f'Node1 t={t1/24:.1f}d')
+    if idx2:
+        plt.axvline(x=t2 / 24, color='red', linestyle=':', linewidth=1.5,
+                    label=f'Node2 t={t2/24:.1f}d')
+
+    plt.xlabel('Time (days)', fontsize=12)
+    plt.ylabel('Displacement (mm)', fontsize=12)
+    plt.title('Three-stage Modeling of Surface Displacement', fontsize=14)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    path = os.path.join(save_dir, '图6 三段拟合曲线.png')
+    plt.savefig(path, dpi=300)
+    plt.show()
+    print(f"[图6] 三段拟合曲线 → {path}")
+
+
+def plot_residuals(stages, save_dir):
+    """图7：各阶段残差"""
+    plt.figure(figsize=(12, 10))
+    colors = {'I': 'b', 'II': 'g', 'III': 'r'}
+    labels = {'I': 'Slow Constant', 'II': 'Accelerating', 'III': 'Rapid'}
+
+    for i, label in enumerate(['I', 'II', 'III'], 1):
+        plt.subplot(3, 1, i)
+        s = stages[label]
+        res = s['d'] - s['d_pred']
+        plt.plot(s['t'] / 24, res, f'{colors[label]}.', markersize=2, alpha=0.5)
+        plt.axhline(0, color='k', linestyle='-')
+        plt.ylabel('Residual (mm)', fontsize=10)
+        # 使用 text 显示 R² 和 RMSE，避免字体警告
+        plt.text(0.02, 0.95, f'$R^2$={s["r2"]:.4f}, RMSE={s["rmse"]:.3f}mm',
+                 transform=plt.gca().transAxes, fontsize=10,
+                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        plt.title(f'Stage {label} ({labels[label]}) Residuals')
+        plt.grid(True, alpha=0.3)
+
+    plt.xlabel('Time (days)', fontsize=12)
+    plt.tight_layout()
+    path = os.path.join(save_dir, '图7 各阶段残差.png')
+    plt.savefig(path, dpi=300)
+    plt.show()
+    print(f"[图7] 各阶段残差 → {path}")
+
+
 def main():
-    """独立运行：从用户输入或默认获取节点，执行建模"""
+    """独立运行：检测节点 → 三段建模 → 画图6+图7"""
     print("=" * 55)
     print("Three-stage Deformation Modeling")
     print("=" * 55)
 
-    # 尝试从 detect_nodes 获取默认节点
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 读取清洗后数据
+    d, t, dt = _load_clean_data()
+
+    # 获取节点
     from detect_nodes import sliding_window_detect
     idx1, t1, idx2, t2 = sliding_window_detect()
 
@@ -154,12 +231,20 @@ def main():
     print("\n" + "=" * 55)
     print("Stage Summary")
     print("-" * 55)
-    print(f"{'Stage':<8} {'Model':<12} {'R^2':>8} {'RMSE(mm)':>10} {'Mean Vel(mm/h)':>16}")
+    print(f"{'Stage':<8} {'Model':<12} {'R²':>8} {'RMSE(mm)':>10} {'Mean Vel(mm/h)':>16}")
     print("-" * 55)
     for label in ["I", "II", "III"]:
         s = stages[label]
         print(f"{label:<8} {s['model']:<12} {s['r2']:>8.4f} {s['rmse']:>10.3f} {s['v_mean']:>16.4f}")
     print("=" * 55)
+
+    # 画图6和图7
+    print("\n>>> 生成图6：三段拟合曲线...")
+    plot_fitting_curve(stages, t, d, idx1, t1, idx2, t2, script_dir)
+    print("\n>>> 生成图7：各阶段残差...")
+    plot_residuals(stages, script_dir)
+
+    plt.show(block=True)
 
 
 if __name__ == "__main__":

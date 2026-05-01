@@ -34,8 +34,3 @@ SPEED_THRESH_HIGH = 5.0   # 高速阈值 (mm/h)
 # ===== 速度平滑参数 =====
 SAVGOL_WINDOW = 151      # Savgol滤波窗口
 SAVGOL_POLY = 2           # 多项式阶数
-
-# ===== matplotlib 显示设置 =====
-import matplotlib.pyplot as plt
-plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']  # 中文字体 + 英文字体fallback
-plt.rcParams['axes.unicode_minus'] = False           # 修复负号显示为方块

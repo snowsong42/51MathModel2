@@ -10,11 +10,19 @@ import os
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+plt.ion()
 from scipy.signal import savgol_filter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
 
+# ===== matplotlib 显示设置 =====
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']  # 中文字体 + 英文字体fallback
+plt.rcParams['axes.unicode_minus'] = False           # 修复负号显示为方块
 
 def _load_clean_data():
     """读取清洗后数据，返回位移数组和时间数组"""
@@ -181,13 +189,57 @@ def _print_nodes(idx1, t1, idx2, t2):
     print()
 
 
+def plot_velocity_nodes(d, t, dt, idx1, t1, idx2, t2, save_dir):
+    """图5：速度曲线 + 节点标记 + 阈值线"""
+    v = np.diff(d) / dt
+    v_smooth = savgol_filter(v, window_length=config.SAVGOL_WINDOW,
+                              polyorder=config.SAVGOL_POLY)
+
+    plt.figure(figsize=(12, 5))
+    plt.plot(t[:-1] / 24, v_smooth, 'r-', linewidth=1.2,
+             label='Smoothed velocity (Savgol)')
+
+    # 阈值线
+    plt.axhline(config.THRESH_SLOW, color='b', linestyle='--', alpha=0.7,
+                label=f'Slow threshold = {config.THRESH_SLOW} mm/h')
+    plt.axhline(config.THRESH_FAST, color='g', linestyle='--', alpha=0.7,
+                label=f'Fast threshold = {config.THRESH_FAST} mm/h')
+
+    # 节点标记
+    if idx1:
+        plt.axvline(x=t1 / 24, color='blue', linestyle=':', linewidth=1.5,
+                    label=f'Node1 (t={t1/24:.1f}d)')
+    if idx2:
+        plt.axvline(x=t2 / 24, color='red', linestyle=':', linewidth=1.5,
+                    label=f'Node2 (t={t2/24:.1f}d)')
+
+    plt.xlabel('Time (days)', fontsize=12)
+    plt.ylabel('Velocity (mm/h)', fontsize=12)
+    plt.title('Velocity Trend and Stage Transition Nodes', fontsize=14)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    path = os.path.join(save_dir, '图5 速度过渡与节点.png')
+    plt.savefig(path, dpi=300)
+    plt.show()
+    print(f"[图5] 速度过渡曲线 → {path}")
+
+
 if __name__ == "__main__":
     print("=" * 50)
     print("阶段转换节点检测")
     print("=" * 50)
 
-    print("\n>>> 方法1：滑动窗口法")
-    sliding_window_detect()
+    # 用默认的滑动窗口法检测并画图
+    d, t, dt = _load_clean_data()
+    idx1, t1, idx2, t2 = sliding_window_detect()
+    if idx1 is None or idx2 is None:
+        print("\n>>> 滑动窗口法失败，回退到MAD+持久性法")
+        idx1, t1, idx2, t2 = mad_persistence_detect()
 
-    print("\n>>> 方法2：MAD+持久性法")
-    mad_persistence_detect()
+    if idx1 is not None and idx2 is not None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        plot_velocity_nodes(d, t, dt, idx1, t1, idx2, t2, script_dir)
+        plt.show(block=True)
+    else:
+        print("\n⚠ 两种检测方法均失败，无法画图5")

@@ -5,6 +5,7 @@
   2) 中值滤波抑制瞬时跳变（窗口可调）
 输出：
   - Filtered 2.xlsx      清洗后数据（序号、时间、位移）
+  - 图4 清洗前后对比.png  原始 vs 清洗后对比图（含差值时序）
   - 命令窗口：清洗前后统计对比
 对标 Q1 filter.m 的数据清洗流程
 """
@@ -12,7 +13,16 @@ import os
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+plt.ion()
 from scipy.signal import medfilt
+
+# ===== matplotlib 显示设置 =====
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']  # 中文字体 + 英文字体fallback
+plt.rcParams['axes.unicode_minus'] = False           # 修复负号显示为方块
 
 # 确保能找到同目录下的 config
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -77,6 +87,34 @@ def main():
     print(f"{'零值点数':<20} {n_zero:>12} {0:>12}")
     print("=" * 55)
     print("预处理完成！")
+
+    # ===== 6. 图4：清洗前后对比 =====
+    print("\n>>> 生成图4：清洗前后对比...")
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+
+    # 上：原始 vs 清洗后叠加
+    ax1.plot(time_h / 24, d_orig, 'gray', linewidth=0.4, alpha=0.6, label='Raw')
+    ax1.plot(time_h / 24, d_filt, 'b-', linewidth=0.8, label='Cleaned')
+    ax1.set_ylabel("Displacement (mm)", fontsize=12)
+    ax1.set_title("Raw vs Cleaned Displacement", fontsize=14)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # 下：差值时序（清洗 - 原始）
+    diff = d_filt - d_orig
+    ax2.plot(time_h / 24, diff, 'r-', linewidth=0.5, alpha=0.7, label='Difference (Cleaned - Raw)')
+    ax2.axhline(0, color='k', linestyle='--', linewidth=0.5)
+    ax2.set_xlabel("Time (days)", fontsize=12)
+    ax2.set_ylabel("Difference (mm)", fontsize=12)
+    ax2.set_title("Cleaning Effect (Difference)", fontsize=14)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(script_dir, "图4 清洗前后对比.png"), dpi=200)
+    plt.show()
+    print("[图4] 清洗前后对比 → 图4 清洗前后对比.png")
+    plt.show(block=True)
 
 if __name__ == "__main__":
     main()

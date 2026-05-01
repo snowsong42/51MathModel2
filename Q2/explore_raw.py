@@ -2,25 +2,34 @@
 原始数据探索性分析（EDA）
 对标 Q1 filter.m 的可视化部分 + 补充分析
 输出：
-  - 4 张可视化图（原始时序、速度分布、加速度水平、清洗前后对比）
+  - 3 张可视化图（原始时序、速度分布、加速度水平）
   - 命令窗口：数据基本统计信息
+
+注意：清洗前后对比图（图4）已移至 preprocess.py
 """
 import os
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-from scipy.signal import medfilt, savgol_filter
+plt.ion()  # 交互模式：所有plt.show()不阻塞，多图同时弹出
+from scipy.signal import savgol_filter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
+
+# ===== matplotlib 显示设置 =====
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']  # 中文字体 + 英文字体fallback
+plt.rcParams['axes.unicode_minus'] = False           # 修复负号显示为方块
 
 def main():
     # ===== 路径设置 =====
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config.SCRIPT_DIR = script_dir
     in_path = os.path.join(script_dir, config.RAW_DATA)
-    clean_path = os.path.join(script_dir, config.CLEAN_DATA)
 
     print("=" * 55)
     print("原始数据探索性分析 (EDA)")
@@ -41,22 +50,6 @@ def main():
     print(f"零值点数: {zero_count} ({zero_count/N*100:.2f}%)")
     print(f"位移范围: [{np.min(d_orig):.2f}, {np.max(d_orig):.2f}] mm")
     print(f"均值±标准差: {np.mean(d_orig):.4f} ± {np.std(d_orig):.4f} mm")
-
-    # 读取清洗后数据（如果有）
-    try:
-        df_clean = pd.read_excel(clean_path, sheet_name=0)
-        d_clean = df_clean["Surface Displacement (mm)"].values
-        has_clean = True
-    except FileNotFoundError:
-        # 如果还没有清洗数据，手动做一遍轻量清洗用于对比
-        d_interp = d_orig.copy()
-        zero_idx = np.where(d_interp == 0)[0]
-        if len(zero_idx) > 0:
-            x = np.arange(N)
-            mask = d_interp != 0
-            d_interp = np.interp(x, x[mask], d_interp[mask])
-        d_clean = medfilt(d_interp, kernel_size=config.MEDFILT_KERNEL)
-        has_clean = False
 
     # ===== 2. 计算速度 =====
     v = np.diff(d_orig) / dt
@@ -84,7 +77,7 @@ def main():
     outliers = d_orig > (mean_d + 3 * std_d)
     if np.any(outliers):
         plt.scatter(t[outliers] / 24, d_orig[outliers],
-                    color='orange', s=10, alpha=0.5, label='3sigma outlier candidates')
+                    color='orange', s=10, alpha=0.5, label='3σ outlier candidates')
 
     plt.xlabel("Time (days)", fontsize=12)
     plt.ylabel("Displacement (mm)", fontsize=12)
@@ -140,23 +133,10 @@ def main():
     plt.show()
     print("[图3] 加速度水平 → 图3 加速度水平.png")
 
-    # 图4：原始 vs 清洗后对比
-    plt.figure(figsize=(14, 6))
-    plt.plot(t / 24, d_orig, 'gray', linewidth=0.4, alpha=0.5, label='Raw')
-    plt.plot(t / 24, d_clean, 'b-', linewidth=0.8, label='Cleaned')
-    plt.xlabel("Time (days)", fontsize=12)
-    plt.ylabel("Displacement (mm)", fontsize=12)
-    plt.title("Raw vs Cleaned Displacement", fontsize=14)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(os.path.join(script_dir, "图4 清洗前后对比.png"), dpi=200)
-    plt.show()
-    print("[图4] 原始 vs 清洗后 → 图4 清洗前后对比.png")
-
     print("\n" + "=" * 55)
-    print("EDA 完成！共生成 4 张图表")
+    print("EDA 完成！共生成 3 张图表（原始时序、速度、加速度）")
     print("=" * 55)
+    plt.show(block=True)  # 保持所有图窗口打开
 
 if __name__ == "__main__":
     main()
