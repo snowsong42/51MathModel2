@@ -121,28 +121,26 @@ writetable(output_table, OUT_FILE);
 fprintf('保存成功！\n');
 
 %% 5. 可视化对比（清洗前后）
-figure('Position', [100 100 1400 900]);
+figure('Position', [100 100 1400 600]);
 
-% --- 子图1：A 序列清洗前后对比 ---
-subplot(3,2,1);
-plot(t_raw, A_raw, 'Color', [0.7 0.7 0.7]); hold on;
+% --- 子图1：A、B 序列清洗前后对比（融合为一张图）---
+subplot(2,1,1);
+% 原始数据（灰色调）
+plot(t_raw, A_raw, 'Color', [0.8 0.8 0.8], 'LineWidth', 0.5); hold on;
+plot(t_raw, B_raw, 'Color', [0.9 0.7 0.7], 'LineWidth', 0.5);
+% 第一步剔除点
 plot(t_raw(out_AB), A_raw(out_AB), 'rx', 'MarkerSize', 8, 'LineWidth', 1.5);
-plot(t_final, A_final, 'b-', 'LineWidth', 1);
-title('A 序列清洗前后对比');
+plot(t_raw(out_AB), B_raw(out_AB), 'mo', 'MarkerSize', 6, 'LineWidth', 1.5);
+% 清洗后数据
+plot(t_final, A_final, 'b-', 'LineWidth', 1.2);
+plot(t_final, B_final, 'r-', 'LineWidth', 1.2);
+title('A、B 序列清洗前后对比');
 xlabel('时间'); ylabel('位移 (mm)');
-legend('原始A', '第一步剔除', '清洗后A', 'Location','best'); grid on;
+legend('原始A', '原始B', '第一步剔除A', '第一步剔除B', '清洗后A', '清洗后B', ...
+    'Location','best', 'NumColumns', 2); grid on;
 
-% --- 子图2：B 序列清洗前后对比 ---
-subplot(3,2,2);
-plot(t_raw, B_raw, 'Color', [0.7 0.7 0.7]); hold on;
-plot(t_raw(out_AB), B_raw(out_AB), 'rx', 'MarkerSize', 8, 'LineWidth', 1.5);
-plot(t_final, B_final, 'r-', 'LineWidth', 1);
-title('B 序列清洗前后对比');
-xlabel('时间'); ylabel('位移 (mm)');
-legend('原始B', '第一步剔除', '清洗后B', 'Location','best'); grid on;
-
-% --- 子图3：差值 D 序列清洗前后对比 ---
-subplot(3,2,3);
+% --- 子图2：差值 D 序列清洗前后对比 ---
+subplot(2,1,2);
 plot(t_raw, A_raw - B_raw, 'Color', [0.7 0.7 0.7]); hold on;
 % 标记两步分别剔除的点
 plot(t_raw(out_AB), A_raw(out_AB) - B_raw(out_AB), 'rx', 'MarkerSize', 8, 'LineWidth', 1.5);
@@ -153,23 +151,10 @@ title('差值 D = A-B 清洗前后对比');
 xlabel('时间'); ylabel('D (mm)');
 legend('原始D', '第一步剔除', '第二步剔除', '清洗后D', 'Location','best'); grid on;
 
-% --- 子图4：清洗后 A vs B 散点图 ---
-subplot(3,2,4);
-scatter(B_final, A_final, 8, 'filled', 'MarkerFaceAlpha', 0.6);
-hold on;
-limits_AB = [min([A_final;B_final]) max([A_final;B_final])];
-plot(limits_AB, limits_AB, 'r--', 'LineWidth', 1.5);
-p_final = polyfit(B_final, A_final, 1);
-B_line = linspace(limits_AB(1), limits_AB(2), 100);
-plot(B_line, polyval(p_final, B_line), 'g-', 'LineWidth', 2);
-xlabel('B'); ylabel('A');
-title(sprintf('清洗后 A vs B (拟合: A=%.3f·B+%.3f)', p_final(1), p_final(2)));
-legend('数据点', 'y=x', '线性拟合', 'Location','best'); grid on;
-axis equal;
+sgtitle('数据清洗效果总览', 'FontSize', 14);
 
-% --- 子图5：移动窗口局部中位数及异常阈值 ---
-subplot(3,2,[5,6]);
-% 绘制局部中位数 ± 25*MAD 包络线与异常点
+%% 6. 单独弹出：移动窗口局部中位数及异常阈值图
+figure('Position', [100 150 1200 500]);
 t1_num = hours(t1 - t1(1));  % 用于绘图
 patch([t1_num; flipud(t1_num)], ...
       [local_median - THRESH_D*local_mad; flipud(local_median + THRESH_D*local_mad)], ...
@@ -182,9 +167,7 @@ xlabel('相对时间 (小时)'); ylabel('D (mm)');
 legend('异常阈值带', '局部中位数', 'D 序列', '第二步剔除点', 'Location','best');
 grid on;
 
-sgtitle('数据清洗效果总览', 'FontSize', 14);
-
-%% 6. 清洗前后统计汇总
+%% 7. 清洗前后统计汇总
 fprintf('\n================== 清洗前后统计对比 ==================\n');
 fprintf('原始数据点数                : %d\n', n_raw);
 fprintf('第一步（A/B单序列）剔除      : %d\n', sum(out_AB));

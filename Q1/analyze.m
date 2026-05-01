@@ -1,14 +1,27 @@
 %% 清理环境
 clear; clc; close all;
 
+%% ================= 参数设置 =================
+% 可切换数据源：'Attachment 1.xlsx'（原始）或 'Filtered 1.xlsx'（清洗后）
+DATA_FILE = 'Filtered 1.xlsx';
+% =============================================
+
 %% 1. 读取数据
-filename = 'D:\project\pythonProject\MathModel\51MathModel2\Q1\Attachment 1.xlsx';
+filename = fullfile('D:\project\pythonProject\MathModel\51MathModel2\Q1', DATA_FILE);
 data = readtable(filename, 'VariableNamingRule', 'preserve');
 
-% 时间列（注意根据实际列名调整）
+% 时间列
 time = datetime(data.Time, 'InputFormat', 'yyyy-MM-dd HH:mm');
-A = data.('Data A (Optical Fiber Displacement Sensor Data, mm)');
-B = data.('Data B (Vibrating Wire Displacement Sensor Data, mm)');
+
+% 根据文件类型动态定位 A、B 数据列
+col_names = data.Properties.VariableNames;
+idx_A = find(contains(col_names, 'Data A') | contains(col_names, 'Data_A'), 1);
+idx_B = find(contains(col_names, 'Data B') | contains(col_names, 'Data_B'), 1);
+if isempty(idx_A) || isempty(idx_B)
+    error('无法识别数据列，当前列名为：%s', strjoin(col_names, ', '));
+end
+A = data{:, idx_A};
+B = data{:, idx_B};
 
 % 转换为相对时间（小时），方便趋势分析
 t_hours = hours(time - time(1));
