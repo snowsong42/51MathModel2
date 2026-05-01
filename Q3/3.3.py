@@ -4,10 +4,11 @@ import matplotlib.pyplot as plt
 from scipy import sparse
 from scipy.sparse.linalg import factorized
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.inspection import permutation_importance
 from sklearn.metrics import r2_score, mean_squared_error
 import os
 
-# ==================== 1. TV去噪函数 (与3.1相同) ====================
+# ==================== 1. TV去噪函数 ====================
 def tv_denoise_admm(y, lam=1.0, rho=1.0, max_iter=100, tol=1e-4):
     y = np.asarray(y, dtype=float)
     N = len(y)
@@ -83,7 +84,7 @@ print("实验集预处理完成，形状:", df_exp_clean.shape)
 X_train = df_train_clean[['a','b','c','d']].values
 y_train = df_train_clean['e'].values
 
-rf = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_split=5,
+rf = RandomForestRegressor(n_estimators=500, max_depth=12, min_samples_split=10,
                            random_state=42, n_jobs=-1)
 rf.fit(X_train, y_train)
 
@@ -93,17 +94,34 @@ rmse = np.sqrt(mean_squared_error(y_train, y_pred_train))
 print(f"\n随机森林模型在训练集上的性能:")
 print(f"R^2 = {r2:.4f}, RMSE = {rmse:.2f} mm")
 
-importance = rf.feature_importances_
+# ---- 特征重要性: 使用排列重要性 (Permutation Importance) ----
+# 排列重要性通过打乱单个特征来评估其对模型性能的独立贡献，
+# 能更好地区分相关特征（如降雨量与孔隙水压力）的真实影响
+perm_result = permutation_importance(
+    rf, X_train, y_train,
+    n_repeats=5,  # 减少重复次数加速计算
+    random_state=42,
+    n_jobs=-1,
+    scoring='r2'
+)
+perm_importance = perm_result.importances_mean
+perm_std = perm_result.importances_std
+
 features = ['Rainfall', 'Pore pressure', 'Microseismic', 'Deep displacement']
-print("\n特征贡献度 (重要性):")
-for f, imp in zip(features, importance):
+print("\n特征贡献度 (排列重要性, 能更好区分相关特征):")
+for f, imp, std in zip(features, perm_importance, perm_std):
+    print(f"  {f}: {imp:.4f} ± {std:.4f}")
+
+# 同时输出传统重要性作对比
+tree_importance = rf.feature_importances_
+print("\n特征贡献度 (传统Gini重要性):")
+for f, imp in zip(features, tree_importance):
     print(f"  {f}: {imp:.4f}")
 
 # ==================== 4. 实验集预测 ====================
 X_exp = df_exp_clean[['a','b','c','d']].values
 y_pred_exp = rf.predict(X_exp)
 
-# 输出预测结果
 df_exp_result = df_exp[['Serial No. ']].copy()
 df_exp_result['Predicted Surface Displacement (mm)'] = y_pred_exp
 exp_output = os.path.join(script_dir, "experimental_set_predictions.xlsx")
@@ -114,16 +132,16 @@ print(f"\n实验集预测结果已保存至 {exp_output}")
 fig = plt.figure(figsize=(16, 12))
 gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
 
-# ---- 子图1: 特征重要性散点图 ----
+# ---- 子图1: 特征重要性 (排列重要性) ----
 ax1 = fig.add_subplot(gs[0, 0])
-ax1.scatter(features, importance, color='steelblue', s=120, zorder=5)
-ax1.plot(features, importance, 'gray', linestyle='--', alpha=0.5)
-for i, (f, imp) in enumerate(zip(features, importance)):
-    ax1.text(i, imp + 0.02, f'{imp:.3f}', ha='center', fontsize=10)
-ax1.set_title('Feature Importance', fontsize=13)
-ax1.set_ylabel('Importance')
+colors = ['#4C72B0', '#DD8452', '#55A868', '#C44E52']
+bars = ax1.bar(features, perm_importance, color=colors, width=0.5, edgecolor='black', linewidth=0.8)
+ax1.errorbar(features, perm_importance, yerr=perm_std, fmt='none', ecolor='black', capsize=5, capthick=1.5, elinewidth=1.5)
+for i, (imp, std) in enumerate(zip(perm_importance, perm_std)):
+    ax1.text(i, imp + std + 0.005, f'{imp:.4f}', ha='center', fontsize=10, fontweight='bold')
+ax1.set_title('Feature Importance (Permutation)\nBetter distinction for correlated features', fontsize=12)
+ax1.set_ylabel('R² Drop when shuffled')
 ax1.grid(axis='y', alpha=0.3)
-ax1.set_ylim(0, max(importance) * 1.3)
 
 # ---- 子图2: 训练集真实值 vs 预测值散点图 ----
 ax2 = fig.add_subplot(gs[0, 1])
@@ -146,18 +164,17 @@ ax3.grid(alpha=0.3)
 plt.suptitle('Question 3.3: Random Forest Prediction for Surface Displacement', fontsize=15, y=0.98)
 plt.savefig(os.path.join(script_dir, 'Q3.3_combined_results.png'), dpi=300, bbox_inches='tight')
 print(f"\n整合结果图已保存至 {os.path.join(script_dir, 'Q3.3_combined_results.png')}")
-plt.show()
+plt.close()
 
-# 同时保存单独的图（方便单独查看）
+# 同时保存单独的图
 plt.figure(figsize=(8,5))
-plt.scatter(features, importance, color='steelblue', s=100, zorder=5)
-plt.plot(features, importance, 'gray', linestyle='--', alpha=0.5)
-for i, (f, imp) in enumerate(zip(features, importance)):
-    plt.text(i, imp + 0.02, f'{imp:.3f}', ha='center', fontsize=10)
-plt.title('Feature Importance for Surface Displacement (Random Forest)')
-plt.ylabel('Importance')
+bars = plt.bar(features, perm_importance, color=colors, width=0.5, edgecolor='black', linewidth=0.8)
+plt.errorbar(features, perm_importance, yerr=perm_std, fmt='none', ecolor='black', capsize=5, capthick=1.5, elinewidth=1.5)
+for i, (imp, std) in enumerate(zip(perm_importance, perm_std)):
+    plt.text(i, imp + std + 0.005, f'{imp:.4f}', ha='center', fontsize=10, fontweight='bold')
+plt.title('Feature Importance (Permutation) for Surface Displacement', fontsize=13)
+plt.ylabel('R² Drop when feature shuffled')
 plt.grid(axis='y', alpha=0.3)
-plt.ylim(0, max(importance) * 1.3)
 plt.savefig(os.path.join(script_dir, 'feature_importance.png'), dpi=300)
 plt.close()
 
