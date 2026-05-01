@@ -112,13 +112,13 @@ for key in ['a','b','c','d','e']:
         flags_level = detect_outliers_mad(y_filled, k=4.0)
         flags_jump = np.zeros(len(y_filled), dtype=bool)
     elif key == 'b':
-        # 孔隙水压力：MAD k=6 + 差分 k=4
+        # 孔隙水压力：MAD k=6 + 差分 k=5.5
         flags_level = detect_outliers_mad(y_filled, k=6.0)
-        flags_jump = detect_outliers_diff(y_filled, k=4.0)
+        flags_jump = detect_outliers_diff(y_filled, k=5.5)
     else:
-        # d/e 位移：MAD k=6 + 差分 k=4
+        # d/e 位移：MAD k=6 + 差分 k=5.5
         flags_level = detect_outliers_mad(y_filled, k=6.0)
-        flags_jump = detect_outliers_diff(y_filled, k=4.0)
+        flags_jump = detect_outliers_diff(y_filled, k=5.5)
 
     flags = flags_level | flags_jump
     outlier_flags[key] = flags
@@ -157,11 +157,11 @@ except PermissionError:
     print(f"原文件被占用，已保存至临时文件 {temp_path}")
 print(f"表3.1已保存至 {table3_1_path}")
 
-# ==================== 7. 找出共同异常点 (≥2个变量异常) ====================
+# ==================== 7. 找出共同异常点 (≥3个变量异常) ====================
 common_outliers = defaultdict(list)
 for t in range(total_length):
     abnormal_vars = [key for key in ['a','b','c','d','e'] if outlier_flags[key][t]]
-    if len(abnormal_vars) >= 2:
+    if len(abnormal_vars) >= 3:
         var_str = ''.join(sorted(abnormal_vars))
         common_outliers[t+1] = var_str
 
