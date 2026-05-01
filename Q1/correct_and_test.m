@@ -213,14 +213,17 @@ legend('校正前数据点', 'y = x', 'Location','best');
 grid on; axis equal;
 
 % 校正前：原始差值 Δ = A - B 时序
+% 先计算统一 y 轴范围（与校正后共用）
 raw_delta = A - B;
+ylim_max = max(max(abs(raw_delta)), max(abs(residuals))) * 1.1;
 subplot(2,2,2);
 plot(time, raw_delta, 'k.', 'MarkerSize', 2); hold on;
 yline(mean(raw_delta), 'r--', 'LineWidth', 1.2);
 yline(0, 'k:', 'LineWidth', 0.8);
-xlabel('时间'); ylabel('\Delta = A - B (mm)');
+xlabel('时间'); ylabel('差值 = A - B (mm)');
 title(sprintf('校正前差值时序 (MAE=%.2f, RMSE=%.2f)', mae_raw, rmse_raw));
 legend('校正前差值', sprintf('均值 = %.2f', mean(raw_delta)), '零线', 'Location','best');
+ylim([-10, ylim_max]); % -10 到 60
 grid on;
 
 % 校正后：A_corr vs B 散点（回归线）
@@ -237,11 +240,11 @@ subplot(2,2,4);
 plot(time, residuals, 'k.', 'MarkerSize', 4); hold on;
 yline(mbe_all, 'r--', 'LineWidth', 1.2);
 yline(0, 'k:', 'LineWidth', 0.8);
-xlabel('时间'); ylabel('残差 B - A_{corr} (mm)');
-title(sprintf('校正后残差时序 (MAE=%.2f, RMSE=%.2f)', mae_all, rmse_all));
-legend('校正后残差', sprintf('均值 = %.4f', mbe_all), '零线', 'Location','best');
+xlabel('时间'); ylabel('差值 = A - B (mm)');
+title(sprintf('校正后差值时序 (MAE=%.2f, RMSE=%.2f)', mae_all, rmse_all));
+legend('校正后差值', sprintf('均值 = %.4f', mbe_all), '零线', 'Location','best');
+ylim([-10, ylim_max]); % -10 到 60
 grid on;
-ylim([-max(abs(residuals))*1.1, max(abs(residuals))*1.1]);
 
 sgtitle('校正前后对比', 'FontSize', 14);
 

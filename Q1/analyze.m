@@ -27,11 +27,13 @@ B = data{:, idx_B};
 t_hours = hours(time - time(1));
 n = length(A);
 
-%% 2. 创建综合诊断图形窗口
+%% 2. 创建综合诊断图形窗口（2×2 布局）
 figure('Position', [50, 50, 1400, 900]);
 
+Delta = A - B;
+
 % ----- 子图1：原始时序对比 -----
-subplot(2,3,1);
+subplot(2,2,1);
 plot(time, A, 'b-', 'LineWidth', 1.2); hold on;
 plot(time, B, 'r-', 'LineWidth', 1.2);
 xlabel('时间'); ylabel('位移 (mm)');
@@ -39,35 +41,8 @@ title('原始时序对比 (A:蓝, B:红)');
 legend('Data A (光纤)', 'Data B (振弦)', 'Location','best');
 grid on;
 
-% ----- 子图2：差值序列 Δ = A - B -----
-Delta = A - B;
-subplot(2,3,2);
-plot(time, Delta, 'k.-', 'MarkerSize', 6);
-yline(0, 'r--', 'LineWidth', 1.5);
-xlabel('时间'); ylabel('\Delta = A - B (mm)');
-title('差值序列');
-grid on;
-
-% ----- 子图3：A vs B 散点图及线性拟合 -----
-subplot(2,3,3);
-scatter(B, A, 10, 'filled', 'MarkerFaceAlpha', 0.6);
-hold on;
-% 参考线 y = x
-limits = [min([A;B]) max([A;B])];
-plot(limits, limits, 'r--', 'LineWidth', 1.5, 'DisplayName', 'y = x');
-% 线性拟合
-coeff = polyfit(B, A, 1);
-B_line = linspace(limits(1), limits(2), 100);
-A_line = polyval(coeff, B_line);
-plot(B_line, A_line, 'g-', 'LineWidth', 2, ...
-    'DisplayName', sprintf('拟合: A=%.3f·B + %.3f', coeff(1), coeff(2)));
-xlabel('Data B (mm)'); ylabel('Data A (mm)');
-title('A 与 B 散点图');
-legend('Location','best'); grid on;
-axis equal;
-
-% ----- 子图4：差值趋势分析 -----
-subplot(2,3,4);
+% ----- 子图2：差值趋势分析 -----
+subplot(2,2,2);
 plot(t_hours, Delta, '.', 'MarkerSize', 6);
 hold on;
 p_delta = polyfit(t_hours, Delta, 1);
@@ -78,8 +53,8 @@ xlabel('时间 (小时)'); ylabel('\Delta (mm)');
 title('差值随时间的变化趋势');
 legend('Location','best'); grid on;
 
-% ----- 子图5：互相关分析 -----
-subplot(2,3,5);
+% ----- 子图3：互相关分析 -----
+subplot(2,2,3);
 [corr_vals, lags] = xcorr(A - mean(A), B - mean(B), 'coeff');
 plot(lags, corr_vals, 'b-', 'LineWidth', 1.2);
 xlabel('滞后 (样本点, 每点代表10分钟)');
@@ -93,8 +68,8 @@ hold on;
 plot(best_lag, corr_vals(idx_max), 'ro', 'MarkerSize', 10, 'LineWidth', 2);
 legend('互相关', sprintf('最大相关滞后 = %d 样本点', best_lag), 'Location','best');
 
-% ----- 子图6：频谱对比 -----
-subplot(2,3,6);
+% ----- 子图4：频谱对比 -----
+subplot(2,2,4);
 Fs = 1 / (10*60); % 采样频率 Hz (10分钟间隔)
 f_axis = (0:floor(n/2)-1) * (Fs / n);
 A_fft = abs(fft(A - mean(A))) / n;
@@ -114,6 +89,8 @@ fprintf('================= 偏移类型诊断统计 =================\n');
 fprintf('差值 Δ 的均值     ：%8.4f mm\n', mean(Delta));
 fprintf('差值 Δ 的标准差   ：%8.4f mm\n', std(Delta));
 fprintf('最佳互相关滞后     ：%d 样本点 (%.1f 分钟)\n', best_lag, best_lag*10);
-fprintf('A vs B 线性拟合    ：A = %.4f·B + %.4f\n', coeff(1), coeff(2));
+% 补充线性拟合（已从可视化中移除，仅用于命令行输出）
+coeff_lin = polyfit(B, A, 1);
+fprintf('A vs B 线性拟合    ：A = %.4f·B + %.4f\n', coeff_lin(1), coeff_lin(2));
 fprintf('差值趋势斜率       ：%.4f mm/小时\n', p_delta(1));
 fprintf('====================================================\n');
