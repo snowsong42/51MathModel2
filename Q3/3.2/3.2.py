@@ -109,6 +109,17 @@ for key in ['a','b','c','d','e']:
 print(f"{'总数':<20} {sum(outlier_counts.values()):>10}")
 print("="*60)
 
+# 保存表3.1到Excel
+table3_1_data = []
+for key in ['a','b','c','d','e']:
+    var_name = {'a':'a：降雨量','b':'b：孔隙水压力','c':'c：微震事件数','d':'d：深部位移','e':'e：表面位移'}[key]
+    table3_1_data.append({'数据集变量': var_name, '异常点数量': int(outlier_counts[key])})
+table3_1_data.append({'数据集变量': '总数', '异常点数量': int(sum(outlier_counts.values()))})
+df_table3_1 = pd.DataFrame(table3_1_data)
+table3_1_path = os.path.join(script_dir, "table3.1_outlier_counts.xlsx")
+df_table3_1.to_excel(table3_1_path, index=False)
+print(f"表3.1已保存至 {table3_1_path}")
+
 # ==================== 7. 找出共同异常点 (≥2个变量异常) ====================
 common_outliers = defaultdict(list)
 for t in range(total_length):
