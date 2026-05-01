@@ -32,7 +32,7 @@ def tv_denoise_admm(y, lam=1.0, rho=1.0, max_iter=100, tol=1e-4):
 
 # ==================== 2. 数据读取 (从 ap3.xlsx) ====================
 script_dir = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(script_dir, "ap3.xlsx")
+file_path = os.path.join(script_dir, "../ap3.xlsx")
 df_train = pd.read_excel(file_path, sheet_name="训练集")
 
 cols = {
@@ -176,4 +176,4 @@ plt.tight_layout()
 plot_path = os.path.join(script_dir, "outlier_detection_results.png")
 plt.savefig(plot_path, dpi=300)
 print(f"异常检测结果图已保存至 {plot_path}")
-plt.show()
+plt.close()
