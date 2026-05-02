@@ -1,53 +1,27 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import sparse
-from scipy.sparse.linalg import factorized
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import r2_score, mean_squared_error
 import os
 
-# ==================== 1. TV去噪函数 ====================
-def tv_denoise_admm(y, lam=1.0, rho=1.0, max_iter=100, tol=1e-4):
-    y = np.asarray(y, dtype=float)
-    N = len(y)
-    e = np.ones(N)
-    D = sparse.diags([-e, e], [0, 1], shape=(N-1, N)).tocsc()
-    DTD = D.T @ D
-    I = sparse.eye(N)
-    A = I + rho * DTD
-    solve_A = factorized(A.tocsc())
-    x = y.copy()
-    z = np.zeros(N-1)
-    u = np.zeros(N-1)
-    for k in range(max_iter):
-        rhs = y + rho * (D.T @ (z - u))
-        x_new = solve_A(rhs)
-        d = D @ x_new + u
-        z_new = np.maximum(0, d - lam/rho) - np.maximum(0, -d - lam/rho)
-        u_new = u + d - z_new
-        if np.linalg.norm(x_new - x) < tol * np.linalg.norm(x):
-            break
-        x, z, u = x_new, z_new, u_new
-    return x
-
-# ==================== 2. 数据读取与预处理 ====================
+# ==================== 1. 读取3.1的去噪结果 ====================
 script_dir = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(script_dir, "ap3.xlsx")
+denoised_dir = os.path.join(script_dir, "../3.1")
 
-df_train = pd.read_excel(file_path, sheet_name="训练集")
-df_exp = pd.read_excel(file_path, sheet_name="实验集")
+df_train_clean = pd.read_excel(os.path.join(denoised_dir, "train_denoised.xlsx"))
+df_exp_clean_raw = pd.read_excel(os.path.join(denoised_dir, "exp_denoised.xlsx"))
 
-train_cols = {
+# 统一列名映射
+train_col_map = {
     'a': 'a: Rainfall (mm)',
     'b': 'b: Pore Water Pressure (kPa)',
     'c': 'c: Microseismic Event Count',
     'd': 'd: Deep Displacement (mm)',
     'e': 'e: Surface Displacement (mm)'
 }
-
-exp_cols = {
+exp_col_map = {
     'a': 'Rainfall (mm)',
     'b': 'Pore Water Pressure (kPa)',
     'c': 'Microseismic Event Count',
@@ -55,30 +29,21 @@ exp_cols = {
     'e': 'Surface Displacement (mm)'
 }
 
-lambda_dict = {'a':0.3, 'b':0.8, 'c':0.2, 'd':0.5, 'e':0.5}
+df_train_clean = df_train_clean.rename(columns=lambda c: c.strip())
+df_exp_clean_raw = df_exp_clean_raw.rename(columns=lambda c: c.strip())
 
-def preprocess_single(df, key, col_name, lam):
-    series = pd.to_numeric(df[col_name], errors='coerce')
-    filled = series.interpolate(method='linear', limit_direction='both')
-    filled = filled.bfill().ffill().fillna(0)
-    denoised = tv_denoise_admm(filled.values, lam=lam)
-    if key == 'c':
-        denoised = np.round(denoised).astype(int)
-    return denoised
-
-def preprocess_dataset(df, col_map, keys, lambda_dict):
-    processed = {}
-    for key in keys:
-        processed[key] = preprocess_single(df, key, col_map[key], lambda_dict[key])
-    return pd.DataFrame(processed)
-
+# 提取需要的列
 train_keys = ['a','b','c','d','e']
-df_train_clean = preprocess_dataset(df_train, train_cols, train_keys, lambda_dict)
-print("训练集预处理完成，形状:", df_train_clean.shape)
+df_train_clean = pd.DataFrame({k: df_train_clean[train_col_map[k].strip()].values for k in train_keys})
 
 exp_keys = ['a','b','c','d']
-df_exp_clean = preprocess_dataset(df_exp, exp_cols, exp_keys, lambda_dict)
-print("实验集预处理完成，形状:", df_exp_clean.shape)
+df_exp_clean = pd.DataFrame({k: df_exp_clean_raw[exp_col_map[k].strip()].values for k in exp_keys})
+
+# 保留实验集的 Serial No. 用于输出
+exp_serial = df_exp_clean_raw['Serial No.'].values if 'Serial No.' in df_exp_clean_raw.columns else df_exp_clean_raw['Serial No. '].values
+
+print("训练集（已去噪）形状:", df_train_clean.shape)
+print("实验集（已去噪）形状:", df_exp_clean.shape)
 
 # ==================== 3. 建立模型 (随机森林) ====================
 X_train = df_train_clean[['a','b','c','d']].values
@@ -122,7 +87,7 @@ for f, imp in zip(features, tree_importance):
 X_exp = df_exp_clean[['a','b','c','d']].values
 y_pred_exp = rf.predict(X_exp)
 
-df_exp_result = df_exp[['Serial No. ']].copy()
+df_exp_result = pd.DataFrame({'Serial No. ': exp_serial})
 df_exp_result['Predicted Surface Displacement (mm)'] = y_pred_exp
 exp_output = os.path.join(script_dir, "experimental_set_predictions.xlsx")
 df_exp_result.to_excel(exp_output, index=False)
