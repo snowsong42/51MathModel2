@@ -168,16 +168,16 @@ residual_disp = x_fact - x_model;
 
 %% ---- 4a. 独立图：滤波后位移时序（区间背景着色） ----
 % 区间背景色定义（第1段=浅绿，第2段=浅黄，第3/4段=浅红）
-segBgColors = {[0.7 1 0.7], [1 1 0.2], [1 0.7 0.7], [1 0.7 0.7]};
+segBgColors = {[0.7 1 0.7], [1 1 0.7], [1 0.7 0.7], [1 0.7 0.7]};
 segNames = {'第1段', '第2段', '第3段', '第4段'};
 % 线条分段着色用颜色（第4部分使用）
-segColors = {[0 0.6 0], [1 0.8 0.2], [0.8 0 0], [0.8 0 0], [0 0.3 0.8]};
+segColors = {[0 0.6 0], [0.85 0.33 0.1], [0.8 0 0], [0.8 0 0], [0 0.3 0.8]};
 
 figure('Position', [100, 100, 1000, 500]);
 hold on;
 
 % 先绘制位移曲线（统一用黑色）
-plot(t_min, x_fact, 'k-', 'LineWidth', 1.2, 'DisplayName', '位移');
+plot(t_min, x_fact, 'k-', 'LineWidth', 1.2, 'DisplayName', '滤波后位移');
 yl = ylim;
 
 % 再绘制区间背景色块（基于已有 ylim）
@@ -199,8 +199,8 @@ end
 
 xlabel('时间 t (min)');
 ylabel('位移 (mm)');
-title('分段结果');
-legend('位移','第1段','第2段','第3段','Location', 'best');
+title('滤波后位移时序（按检测阶段区间背景着色）');
+legend('Location', 'best');
 grid on;
 hold off;
 
@@ -210,7 +210,7 @@ figure('Position', [100, 100, 1400, 900]);
 
 subplot(3,1,1);
 hold on;
-plot(t_min, v,'Color',[0.2 0.2 0.2],'LineWidth',2);
+plot(t_min, v,'Color','-b');
 for i = 1:nSeg
     idx_start = segments(i, 1);
     idx_end   = segments(i, 2);
@@ -222,26 +222,27 @@ for i = 1:length(cp_idx)
     xline(t_min(cp_idx(i)), '--', 'LineWidth', 1.0);
 end
 ylabel('速度 (mm/min)');
-title('速度：测算速度 vs 多项式拟合速度');
-legend('测算速度', '拟合速度（按段着色）', 'Location', 'best');
+title('速度：测量值 vs 多项式拟合');
+legend('平滑速度', '拟合速度（按段着色）', 'Location', 'best');
 grid on;
 
 subplot(3,1,2);
 hold on;
-plot(t_min, x_fact,'Color',[0.2 0.2 0.2],'LineWidth',2);
 for i = 1:nSeg
     idx_start = segments(i, 1);
     idx_end   = segments(i, 2);
     if idx_start > idx_end, continue; end
-    plot(t_min(idx_start:idx_end), x_model(idx_start:idx_end), '-', ...
+    plot(t_min(idx_start:idx_end), x_fact(idx_start:idx_end), '-', ...
+        'Color', segColors{min(i,5)}, 'LineWidth', 1.2);
+    plot(t_min(idx_start:idx_end), x_model(idx_start:idx_end), '--', ...
         'Color', segColors{min(i,5)}, 'LineWidth', 1.5);
 end
 for i = 1:length(cp_idx)
     xline(t_min(cp_idx(i)), '--', 'LineWidth', 1.0);
 end
 ylabel('位移 (mm)');
-title('位移：测算位移 vs 多项式拟合位移');
-legend('测算位移', '拟合位移（按段着色）', 'Location', 'best');
+title('位移：滤波测量值 vs 模型积分位移');
+legend('滤波后位移', '拟合位移', 'Location', 'best');
 grid on;
 
 subplot(3,1,3);

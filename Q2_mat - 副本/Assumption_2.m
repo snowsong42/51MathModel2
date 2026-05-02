@@ -20,7 +20,7 @@ t_min = (t_idx - 1) * dt;
 
 %% ---- 1. 混合分段点检测 (0~split_t_fixed用rms, >split_t_fixed用linear) ----
 % 固定分段点时间（min）
-split_t_fixed = 79800;
+split_t_fixed = 87350;
 % 找到对应索引（取第一个不小于该时间的点）
 split_idx = find(t_min >= split_t_fixed, 1, 'first');
 if isempty(split_idx)
@@ -76,7 +76,7 @@ end
 
 
 % ---- 各段多项式阶数（可按需修改，长度必须等于 nSeg）----
-poly_order = [1, 2, 1, 1, 3];   % 请根据实际需要修改
+poly_order = [1, 2,2, 2, 3];   % 请根据实际需要修改
 
 fprintf('数据长度: %d, 时间跨度: %.1f min\n', N, t_min(end));
 fprintf('固定分段点: t = %.1f min (索引 %d)\n', split_t_fixed, split_idx);
