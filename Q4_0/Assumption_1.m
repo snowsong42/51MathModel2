@@ -22,12 +22,12 @@ v = dataV.Velocity_mm_min_raw;             % 原始速度 (mm/min)
 fprintf('数据长度: %d, 时间跨度: %.1f min\n', N, t_min(end));
 
 %% ---- 1. 核心：findchangepts 检测速度的线性趋势突变点 ----
-max_cp = 3;                    % 最多检测 3 个拐点（最多 4 段）
+max_cp = 4;                    % 拐点数量
 min_dist = round(N * 0.005);   % 最小间隔，防止过于密集
 
 [cp_idx, cp_res] = findchangepts(v, ...
     'MaxNumChanges', max_cp, ...
-    'Statistic', 'linear', 'MinDistance',min_dist);  % 灵敏度可调
+    'Statistic', 'rms', 'MinDistance',min_dist);  % 灵敏度可调
 
 cp_idx = sort(cp_idx(:)');     % 转为行向量，确保索引顺序
 cp_time = t_min(cp_idx);       % 拐点对应的时间 (min)
@@ -41,7 +41,7 @@ segments = [1, cp_idx+1; cp_idx, N]';  % 每一行是 [start, end]
 if segments(1,1) ~= 1, segments(1,1) = 1; end
 if segments(end,2) ~= N, segments(end,2) = N; end
 
-nSeg = size(segments, 1);  % 应为 4
+nSeg = size(segments, 1);
 
 fprintf('\n======== 分段匀加速（速度线性）拟合结果与残差分析 ========\n');
 v_fit = zeros(N, 1);       % 拟合速度
@@ -160,30 +160,6 @@ else
     fprintf('\n>>> 评估：位移残差明显，分段匀加速模型不能完美描述实际运动，\n');
     fprintf('    系统可能存在加速度连续变化的过程（非恒定加速度）。\n');
 end
-
-%% ---- 7. 前三段整体位移拟合评价 ----
-first3_mask = false(N, 1);
-for i = 1:min(3, nSeg)
-    idx_start = segments(i, 1);
-    idx_end   = segments(i, 2);
-    if idx_start <= idx_end
-        first3_mask(idx_start:idx_end) = true;
-    end
-end
-residual_first3 = residual_disp(first3_mask);
-x_filt_first3   = x_filt(first3_mask);
-
-SS_res3 = sum(residual_first3.^2);
-SS_tot3 = sum((x_filt_first3 - mean(x_filt_first3)).^2);
-R_sq3   = 1 - SS_res3/SS_tot3;
-RMSE3   = sqrt(mean(residual_first3.^2));
-MAE3    = mean(abs(residual_first3));
-
-fprintf('\n======== 前三段整体位移拟合评价 ========\n');
-fprintf('决定系数 R²  : %.6f\n', R_sq3);
-fprintf('均方根误差 RMSE : %.4f mm\n', RMSE3);
-fprintf('平均绝对误差 MAE : %.4f mm\n', MAE3);
-fprintf('最大绝对残差     : %.4f mm\n', max(abs(residual_first3)));
 
 %% ---- 8. 输出关键参数给 Assumption_2.m ---- 
 % 第一个分段点索引和对应时间，供 Assumption_2.m 作为固定分点使用
