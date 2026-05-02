@@ -173,6 +173,7 @@ for idx, key in enumerate(['a','b','c','d','e']):
 axes[-1].set_xlabel('时间序号 (10分钟间隔)')
 plt.suptitle('公平版异常检测：Robust标准化 + 统一MAD异常检测(k=4.0)', fontsize=13)
 plt.tight_layout()
+plt.show()
 plot_path = os.path.join(script_dir, "outlier_detection_results.png")
 plt.savefig(plot_path, dpi=300)
 print(f"异常检测结果图已保存至 {plot_path}")
