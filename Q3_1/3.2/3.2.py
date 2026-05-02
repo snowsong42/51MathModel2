@@ -1,41 +1,16 @@
 import pandas as pd
 import numpy as np
-from scipy import sparse
-from scipy.sparse.linalg import factorized
 from collections import defaultdict
 import os
 import matplotlib.pyplot as plt
 
-# ==================== 1. TV去噪函数 (ADMM) ====================
-def tv_denoise_admm(y, lam=1.0, rho=1.0, max_iter=100, tol=1e-4):
-    y = np.asarray(y, dtype=float)
-    N = len(y)
-    e = np.ones(N)
-    D = sparse.diags([-e, e], [0, 1], shape=(N-1, N)).tocsc()
-    DTD = D.T @ D
-    I = sparse.eye(N)
-    A = I + rho * DTD
-    solve_A = factorized(A.tocsc())
-    x = y.copy()
-    z = np.zeros(N-1)
-    u = np.zeros(N-1)
-    for k in range(max_iter):
-        rhs = y + rho * (D.T @ (z - u))
-        x_new = solve_A(rhs)
-        d = D @ x_new + u
-        z_new = np.maximum(0, d - lam/rho) - np.maximum(0, -d - lam/rho)
-        u_new = u + d - z_new
-        if np.linalg.norm(x_new - x) < tol * np.linalg.norm(x):
-            break
-        x, z, u = x_new, z_new, u_new
-    return x
-
-# ==================== 2. 数据读取 ====================
+# ==================== 1. 读取3.1的去噪结果 ====================
 script_dir = os.path.dirname(os.path.abspath(__file__))
-file_path = os.path.join(script_dir, "../ap3.xlsx")
-df_train = pd.read_excel(file_path, sheet_name="训练集")
+denoised_path = os.path.join(script_dir, "../3.1/train_denoised.xlsx")
+df_denoised = pd.read_excel(denoised_path)
 
-cols = {
+# 统一列名映射
+col_map = {
     'a': 'a: Rainfall (mm)',
     'b': 'b: Pore Water Pressure (kPa)',
     'c': 'c: Microseismic Event Count',
@@ -43,17 +18,13 @@ cols = {
     'e': 'e: Surface Displacement (mm)'
 }
 
-raw_data = {}
-for key, col in cols.items():
-    series = pd.to_numeric(df_train[col], errors='coerce')
-    raw_data[key] = series
+df_denoised = df_denoised.rename(columns=lambda c: c.strip())
 
-# ==================== 3. 缺失值补齐 ====================
 filled_data = {}
-for key, series in raw_data.items():
-    filled = series.interpolate(method='linear', limit_direction='both')
-    filled = filled.bfill().ffill().fillna(0)
-    filled_data[key] = filled.values
+for key, col in col_map.items():
+    filled_data[key] = df_denoised[col.strip()].values
+
+print(f"已加载3.1去噪后的训练集数据，长度={len(filled_data['a'])}")
 
 # ==================== 4. Robust标准化 (统一量纲) ====================
 # 每个变量 z = (x - median) / MAD → 无量纲的"偏离倍数"
