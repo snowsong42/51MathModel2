@@ -99,12 +99,8 @@ for key in ['a','b','c','d','e']:
 table3_1_data.append({'数据集变量': '总数', '异常点数量': total_count, '占比(%)': round(total_pct, 2)})
 df_table3_1 = pd.DataFrame(table3_1_data)
 table3_1_path = os.path.join(script_dir, "table3.1_outlier_counts.xlsx")
-try:
-    df_table3_1.to_excel(table3_1_path, index=False)
-except PermissionError:
-    temp_path = os.path.join(script_dir, "table3.1_outlier_counts_temp.xlsx")
-    df_table3_1.to_excel(temp_path, index=False)
-    print(f"原文件被占用，已保存至临时文件 {temp_path}")
+df_table3_1.to_excel(table3_1_path, index=False)
+
 print(f"表3.1已保存至 {table3_1_path}")
 
 # ==================== 8. 共同异常点 (≥2个变量异常) ====================
