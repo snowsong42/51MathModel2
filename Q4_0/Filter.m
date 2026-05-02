@@ -7,19 +7,18 @@
 % ============================================================
 clear; clc; close all;
 
-%% ---- 1. 读取 Excel 数据（指定训练集 Sheet，保留原始列名） ----
-filename = 'ap4.xlsx';
+
+
+%% ---- 1. 读取 Excel 数据（保留原始列名，消除警告） ----
+filename = 'Attachment 4.xlsx';
 sheetName = '训练集';                    % 读取训练集 Sheet
 opts = detectImportOptions(filename, 'Sheet', sheetName);
 opts.VariableNamingRule = 'preserve';   % 关键：保留原始列名，不修改
 dataTable = readtable(filename, opts, 'Sheet', sheetName);
-
-% 使用简单序列序号作为 x 轴（不读取时间列）
-N = height(dataTable);
-serialNo = (1:N)';                     % 序列序号：1,2,3,...
-rawDisplacement = dataTable{:, 2};     % 位移列（第2列：Surface Displacement）
-
-N = length(rawDisplacement);
+% 根据原始列名获取数据（若列名包含空格或括号，请使用 .() 索引）
+N = height(dataTable);                 % 10分钟一采样的序列数，通过行数实现
+serialNo = (1:N)';                     % 用行号作为序列编号
+rawDisplacement = dataTable{:, 2};     % 第2列：位移列
 disp(['数据长度：', num2str(N)]);
 
 %% ---- 2. 零值线性插值（必须放在所有滤波之前） ----
