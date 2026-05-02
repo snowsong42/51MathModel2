@@ -1,6 +1,6 @@
 %% ============================================================
-% 降噪效果检查脚本：频谱对比 + 信噪比输出
-% 读取 Filtered_Result.csv，含三列：SerialNo, RawDisplacement, FilteredDisplacement
+% 降噪效果检查脚本：频谱对比 + 信噪比输出 (含包络包裹填色)
+% 修正版：修复 MinPeakDistance 错误
 % ============================================================
 clear; clc; close all;
 
@@ -10,7 +10,6 @@ data = readtable(filename);
 raw = data.RawDisplacement;
 filtered = data.FilteredDisplacement;
 
-% 去除缺失值（以防万一）
 valid = ~isnan(raw) & ~isnan(filtered);
 raw = raw(valid);
 filtered = filtered(valid);
@@ -22,45 +21,70 @@ residual = raw - filtered;
 SNR = 20 * log10(std(raw) / std(residual));
 fprintf('信噪比 SNR = %.2f dB\n', SNR);
 
-%% ---- 3. 功率谱估计与绘图 ----
-% 设定 Welch 谱估计参数
+%% ---- 3. 功率谱估计 ----
 window = min(256, N);
 noverlap = round(window/2);
 nfft = 1024;
 
-% 降噪前功率谱
 [Pxx_raw, f] = pwelch(raw - mean(raw), hamming(window), noverlap, nfft, 1);
-
-% 降噪后功率谱
 [Pxx_filt, ~] = pwelch(filtered - mean(filtered), hamming(window), noverlap, nfft, 1);
 
-% 绘制降噪前频谱
-figure('Position', [100, 100, 800, 500]);
-semilogy(f, Pxx_raw, 'b-', 'LineWidth', 1.5);
-xlabel('频率 (周期/序号)'); ylabel('功率谱密度');
-title(sprintf('降噪前功率谱 (SNR = %.2f dB)', SNR));
-grid on;
-%saveas(gcf, 'before_denoise_psd.png');
-%fprintf('降噪前频谱图已保存至 before_denoise_psd.png\n');
+%% ---- 4. 计算上下包络线（修正后的函数） ----
+[f_upper_raw, P_upper_raw] = getEnvelope(f, Pxx_raw, 'upper');
+[f_lower_raw, P_lower_raw] = getEnvelope(f, Pxx_raw, 'lower');
 
-% 绘制降噪后频谱
-figure('Position', [100, 100, 800, 500]);
-semilogy(f, Pxx_filt, 'r-', 'LineWidth', 1.5);
-xlabel('频率 (周期/序号)'); ylabel('功率谱密度');
-title(sprintf('降噪后功率谱 (SNR = %.2f dB)', SNR));
-grid on;
-%saveas(gcf, 'after_denoise_psd.png');
-%fprintf('降噪后频谱图已保存至 after_denoise_psd.png\n');
+[f_upper_filt, P_upper_filt] = getEnvelope(f, Pxx_filt, 'upper');
+[f_lower_filt, P_lower_filt] = getEnvelope(f, Pxx_filt, 'lower');
 
-% 可选：叠加对比图
-figure('Position', [100, 100, 800, 500]);
-semilogy(f, Pxx_raw, 'b-', 'LineWidth', 1.2); hold on;
-semilogy(f, Pxx_filt, 'r-', 'LineWidth', 1.2);
-xlabel('频率 (周期/序号)'); ylabel('功率谱密度');
-title(sprintf('频谱对比 (SNR = %.2f dB)', SNR));
-legend('降噪前', '降噪后');
-grid on;
-%saveas(gcf, 'spectrum_comparison.png');
-%fprintf('频谱对比图已保存至 spectrum_comparison.png\n');
+%% ---- 5. 绘图 ----
+figure('Position', [100, 100, 1000, 650]);
+ax = gca;
+set(ax, 'YScale', 'log');
+hold on;
 
-disp('全部检查完成。');
+% 降噪后填充
+fill([f_upper_filt; flipud(f_lower_filt)], ...
+     [P_upper_filt; flipud(P_lower_filt)], ...
+     'r', 'FaceAlpha', 0.08, 'EdgeColor', 'none');
+plot(f_upper_filt, P_upper_filt, 'r--', 'LineWidth', 1.0);
+plot(f_lower_filt, P_lower_filt, 'r--', 'LineWidth', 1.0);
+plot(f, Pxx_filt, 'r-', 'LineWidth', 1.2);
+
+% 降噪前填充
+fill([f_upper_raw; flipud(f_lower_raw)], ...
+     [P_upper_raw; flipud(P_lower_raw)], ...
+     'b', 'FaceAlpha', 0.08, 'EdgeColor', 'none');
+plot(f_upper_raw, P_upper_raw, 'b--', 'LineWidth', 1.0);
+plot(f_lower_raw, P_lower_raw, 'b--', 'LineWidth', 1.0);
+plot(f, Pxx_raw, 'b-', 'LineWidth', 1.2);
+
+
+xlabel('频率 (周期/序号)');
+ylabel('功率谱密度');
+title(sprintf('降噪前后傅里叶频谱对比 (信噪比 = %.2f dB)', SNR));
+legend('降噪后包络填充','降噪后上包络','降噪后下包络','降噪后功率谱',...
+        '降噪前包络填充','降噪前上包络','降噪前下包络','降噪前功率谱',...
+       'Location','best');
+grid on;
+
+%% ============================================================
+% 辅助函数：提取频谱的上下包络（修正版）
+% ============================================================
+function [f_env, env_vals] = getEnvelope(f, Pxx, mode)
+    % 按样本索引找峰值，避免 MinPeakDistance 单位问题
+    minPeakDistance = max(3, round(length(f)/50));  % 样本点间隔
+    if strcmp(mode, 'upper')
+        [pks, idx] = findpeaks(Pxx, 'MinPeakDistance', minPeakDistance);
+    else
+        [pks, idx] = findpeaks(-Pxx, 'MinPeakDistance', minPeakDistance);
+        pks = -pks;
+    end
+    locs = f(idx);
+    % 插值到原频率网格
+    if length(locs) >= 2
+        env_vals = interp1(locs, pks, f, 'pchip', 'extrap');
+    else
+        env_vals = ones(size(f)) * mean(Pxx);
+    end
+    f_env = f;
+end
