@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 from scipy.ndimage import generic_filter
+from scipy.signal import savgol_filter
 import os
 
 # ===== matplotlib 显示设置 =====
@@ -79,10 +80,10 @@ def dynamic_smooth(signal, window_std=60, base_radius=8, sharp_radius=1):
 
 def load_fill_and_smooth(df, col_map, keys, smooth_params=None):
     """
-    读取数据 -> 三次样条插值 -> 动态平滑
+    读取数据 -> 三次样条插值 -> 动态平滑 -> SG滤波
     返回两个字典：
         data_filled : 插值后的数据（用于绘图）
-        data_smooth : 动态平滑后的数据（用于输出）
+        data_smooth : 动态平滑+SG滤波后的数据（用于输出）
     """
     if smooth_params is None:
         smooth_params = {}   # 可针对每列传入不同的参数，这里全部使用全局默认值
@@ -93,9 +94,11 @@ def load_fill_and_smooth(df, col_map, keys, smooth_params=None):
         filled = cubic_spline_fill(series)
         data_filled[key] = filled
 
-        # 调用动态平滑（可传入特定参数，若未指定则使用函数默认值）
+        # 第一步：动态平滑（GAUSS）
         params = smooth_params.get(key, {})
         smoothed = dynamic_smooth(filled, **params)
+        # 第二步：SG滤波平滑，进一步去除残余高频噪声
+        smoothed = savgol_filter(smoothed, window_length=21, polyorder=3)
         data_smooth[key] = smoothed
     return data_filled, data_smooth
 
@@ -105,11 +108,11 @@ exp_keys = ['a', 'b', 'c', 'd', 'e']
 
 # 动态平滑参数（可根据每列特点单独设置，这里全部统一）
 smooth_params = {
-    'a': dict(window_std=60, base_radius=8, sharp_radius=1),
-    'b': dict(window_std=60, base_radius=8, sharp_radius=1),
-    'c': dict(window_std=60, base_radius=8, sharp_radius=1),
-    'd': dict(window_std=60, base_radius=8, sharp_radius=1),
-    'e': dict(window_std=60, base_radius=8, sharp_radius=1),
+    'a': dict(window_std=500, base_radius=10, sharp_radius=0.1),
+    'b': dict(window_std=500, base_radius=10, sharp_radius=3),
+    'c': dict(window_std=500, base_radius=10, sharp_radius=3),
+    'd': dict(window_std=500, base_radius=10, sharp_radius=3),
+    'e': dict(window_std=500, base_radius=10, sharp_radius=3),
 }
 
 # 处理训练集
@@ -132,7 +135,7 @@ df_train_out = pd.DataFrame({
     'd: Deep Displacement (mm)': data_smooth_train['d'],
     'e: Surface Displacement (mm)': data_smooth_train['e'],
 })
-train_out_path = os.path.join(script_dir, "train_smoothed.xlsx")
+train_out_path = os.path.join(script_dir, "train_denoised.xlsx")
 df_train_out.to_excel(train_out_path, index=False)
 print(f"训练集平滑结果已保存至 {train_out_path}")
 
@@ -145,7 +148,7 @@ df_exp_out = pd.DataFrame({
     'Deep Displacement (mm)': data_smooth_exp['d'],
     'Surface Displacement (mm)': data_smooth_exp['e'],
 })
-exp_out_path = os.path.join(script_dir, "exp_smoothed.xlsx")
+exp_out_path = os.path.join(script_dir, "exp_denoised.xlsx")
 df_exp_out.to_excel(exp_out_path, index=False)
 print(f"实验集平滑结果已保存至 {exp_out_path}")
 
@@ -170,14 +173,16 @@ for i, key in enumerate(['a', 'b', 'c', 'd', 'e']):
     t = np.arange(len(orig))
     ax.plot(t, orig, 'gray', alpha=0.3, linewidth=0.5, label='原始数据（含缺失）')
     ax.plot(t, filled, 'b--', alpha=0.6, linewidth=0.8, label='三次样条插值')
-    ax.plot(t, smoothed, 'r-', linewidth=1.5, label='动态窗口平滑')
+    ax.plot(t, smoothed, 'r-', linewidth=1.5, label='动态平滑 + SG滤波')
     ax.set_ylabel(key_names[key], fontsize=11)
     ax.legend(loc='upper right', fontsize=9)
     ax.grid(alpha=0.2)
-axes[0].set_title('训练集各变量 三次样条插值 + 动态平滑 效果', fontsize=14)
+axes[0].set_title('训练集各变量 三次样条插值 + 动态平滑 + SG滤波 效果', fontsize=14)
 axes[-1].set_xlabel('时间序号', fontsize=12)
 plt.tight_layout()
 plt.savefig(os.path.join(script_dir, "smoothing_result.png"), dpi=300)
 print(f"平滑效果图已保存至 {os.path.join(script_dir, 'smoothing_result.png')}")
+print("GAUSS参数: window_std=80, base_radius=15, sharp_radius=0.5")
+print("SG滤波参数: window_length=21, polyorder=3")
 plt.show()
 plt.close()
