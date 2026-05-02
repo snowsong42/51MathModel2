@@ -133,37 +133,50 @@ def modeling_with_nodes(idx1, idx2):
 
 def _print_stage(label, s):
     """打印单个阶段的建模结果"""
-    print(f"\n  Stage {label} ({s['name']})")
-    print(f"    Model: {s['model_str']}")
-    print(f"    R^2 = {s['r2']:.4f}, RMSE = {s['rmse']:.3f} mm")
-    print(f"    Duration: {s['duration_h']:.1f} h, Delta d: {s['delta_d_mm']:.2f} mm")
-    print(f"    Mean velocity: {s['v_mean']:.4f} mm/h")
+    print(f"\n  阶段 {label} ({s['name']})")
+    print(f"    模型: {s['model_str']}")
+    print(f"    R² = {s['r2']:.4f}, RMSE = {s['rmse']:.3f} mm")
+    print(f"    持续时间: {s['duration_h']:.1f} h, 位移增量: {s['delta_d_mm']:.2f} mm")
+    print(f"    平均速度: {s['v_mean']:.4f} mm/h")
 
 
 def plot_fitting_curve(stages, t_full, d_full, idx1, t1, idx2, t2, save_dir):
-    """图6：原始位移 + 分段拟合曲线 + 节点标记"""
+    """图6：原始位移 + 分段拟合曲线 + 节点标记 + 三阶段色块"""
     plt.figure(figsize=(12, 6))
-    plt.plot(t_full / 24, d_full, 'k-', linewidth=0.6, alpha=0.7,
-             label='Filtered displacement')
+    ax = plt.gca()
+
+    t_end = t_full[-1] / 24
+    t1_day = t1 / 24
+    t2_day = t2 / 24
+
+    # 三阶段色块背景（与图5统一）
+    ax.axvspan(0, t1_day, alpha=0.06, color='blue', label='阶段 I (匀速)')
+    ax.axvspan(t1_day, t2_day, alpha=0.06, color='green', label='阶段 II (加速)')
+    ax.axvspan(t2_day, t_end, alpha=0.06, color='red', label='阶段 III (快速)')
+
+    # 原始数据调暗，拟合曲线加粗
+    plt.plot(t_full / 24, d_full, 'k-', linewidth=0.5, alpha=0.5,
+             label='滤波后位移')
 
     colors = {'I': 'b', 'II': 'g', 'III': 'r'}
+    stage_names = {'I': '匀速', 'II': '加速', 'III': '快速'}
     for label in ['I', 'II', 'III']:
         s = stages[label]
         plt.plot(s['t'] / 24, s['d_pred'], f'{colors[label]}--',
-                 linewidth=2, label=f'Stage {label} ({s["model"]} fit)')
+                 linewidth=2.5, label=f'阶段{label} ({stage_names[label]}, R²={s["r2"]:.4f})')
 
-    # 标记节点
+    # 节点线：黑色加粗虚线
     if idx1:
-        plt.axvline(x=t1 / 24, color='blue', linestyle=':', linewidth=1.5,
-                    label=f'Node1 t={t1/24:.1f}d')
+        plt.axvline(x=t1_day, color='black', linestyle='--', linewidth=2, alpha=0.7,
+                    label=f'节点1 t={t1_day:.1f}d')
     if idx2:
-        plt.axvline(x=t2 / 24, color='red', linestyle=':', linewidth=1.5,
-                    label=f'Node2 t={t2/24:.1f}d')
+        plt.axvline(x=t2_day, color='black', linestyle='--', linewidth=2, alpha=0.7,
+                    label=f'节点2 t={t2_day:.1f}d')
 
-    plt.xlabel('Time (days)', fontsize=12)
-    plt.ylabel('Displacement (mm)', fontsize=12)
-    plt.title('Three-stage Modeling of Surface Displacement', fontsize=14)
-    plt.legend()
+    plt.xlabel('时间 (天)', fontsize=12)
+    plt.ylabel('位移 (mm)', fontsize=12)
+    plt.title('三段式形变建模', fontsize=14)
+    plt.legend(fontsize=9)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     path = os.path.join(save_dir, '图6 三段拟合曲线.png')
@@ -173,27 +186,75 @@ def plot_fitting_curve(stages, t_full, d_full, idx1, t1, idx2, t2, save_dir):
 
 
 def plot_residuals(stages, save_dir):
-    """图7：各阶段残差"""
-    plt.figure(figsize=(12, 10))
+    """图7：各阶段残差 + 整体残差（2×2布局）"""
     colors = {'I': 'b', 'II': 'g', 'III': 'r'}
-    labels = {'I': 'Slow Constant', 'II': 'Accelerating', 'III': 'Rapid'}
+    labels = {'I': '匀速阶段', 'II': '加速阶段', 'III': '快速阶段'}
 
-    for i, label in enumerate(['I', 'II', 'III'], 1):
-        plt.subplot(3, 1, i)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+    for i, label in enumerate(['I', 'II', 'III']):
+        ax = axes[i // 2][i % 2]
         s = stages[label]
         res = s['d'] - s['d_pred']
-        plt.plot(s['t'] / 24, res, f'{colors[label]}.', markersize=2, alpha=0.5)
-        plt.axhline(0, color='k', linestyle='-')
-        plt.ylabel('Residual (mm)', fontsize=10)
-        # 使用 text 显示 R² 和 RMSE，避免字体警告
-        plt.text(0.02, 0.95, f'$R^2$={s["r2"]:.4f}, RMSE={s["rmse"]:.3f}mm',
-                 transform=plt.gca().transAxes, fontsize=10,
-                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        plt.title(f'Stage {label} ({labels[label]}) Residuals')
-        plt.grid(True, alpha=0.3)
+        res_std = np.std(res)
 
-    plt.xlabel('Time (days)', fontsize=12)
-    plt.tight_layout()
+        # 误差带
+        ax.axhline(0, color='k', linestyle='-', linewidth=1)
+        ax.axhline(2 * res_std, color='dimgray', linestyle='--', linewidth=1.0, alpha=0.7)
+        ax.axhline(-2 * res_std, color='dimgray', linestyle='--', linewidth=1.0, alpha=0.7)
+        ax.axhline(3 * res_std, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+        ax.axhline(-3 * res_std, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+        ax.fill_between(s['t'] / 24, -2 * res_std, 2 * res_std,
+                        color='gray', alpha=0.15, label='±2σ')
+        ax.fill_between(s['t'] / 24, -3 * res_std, 3 * res_std,
+                        color='gray', alpha=0.10, label='±3σ')
+
+        # 残差点
+        ax.plot(s['t'] / 24, res, f'{colors[label]}.', markersize=3, alpha=0.3)
+        ax.set_ylabel('残差 (mm)', fontsize=10)
+
+        # R²和RMSE文字框-左上角统一位置
+        ax.text(0.02, 0.95, f'R²={s["r2"]:.4f}\nRMSE={s["rmse"]:.3f} mm',
+                transform=ax.transAxes, fontsize=10,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.6))
+        ax.set_title(f'阶段{label} ({labels[label]}) 残差', fontsize=12)
+        ax.grid(True, alpha=0.3)
+        if i == 0:
+            ax.legend(fontsize=8, loc='upper right')
+
+    # 右下：整体残差
+    ax = axes[1][1]
+    t_all = np.concatenate([stages[l]['t'] for l in ['I', 'II', 'III']])
+    d_all = np.concatenate([stages[l]['d'] for l in ['I', 'II', 'III']])
+    d_pred_all = np.concatenate([stages[l]['d_pred'] for l in ['I', 'II', 'III']])
+    res_all = d_all - d_pred_all
+    res_std_all = np.std(res_all)
+    r2_all = r2_score(d_all, d_pred_all)
+    rmse_all = np.sqrt(mean_squared_error(d_all, d_pred_all))
+
+    ax.axhline(0, color='k', linestyle='-', linewidth=1)
+    ax.axhline(2 * res_std_all, color='dimgray', linestyle='--', linewidth=1.0, alpha=0.7)
+    ax.axhline(-2 * res_std_all, color='dimgray', linestyle='--', linewidth=1.0, alpha=0.7)
+    ax.axhline(3 * res_std_all, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+    ax.axhline(-3 * res_std_all, color='gray', linestyle=':', linewidth=1.0, alpha=0.5)
+    ax.fill_between(t_all / 24, -2 * res_std_all, 2 * res_std_all,
+                    color='gray', alpha=0.15, label='±2σ')
+    ax.fill_between(t_all / 24, -3 * res_std_all, 3 * res_std_all,
+                    color='gray', alpha=0.10, label='±3σ')
+
+    ax.plot(t_all / 24, res_all, '.', color='purple', markersize=3, alpha=0.3)
+    ax.set_ylabel('残差 (mm)', fontsize=10)
+    ax.text(0.02, 0.95, f'R²={r2_all:.4f}\nRMSE={rmse_all:.3f} mm',
+            transform=ax.transAxes, fontsize=10,
+            verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.6))
+    ax.set_title('整体残差', fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8, loc='upper right')
+
+    fig.text(0.5, 0.02, '时间 (天)', ha='center', fontsize=12)
+    plt.tight_layout(rect=[0, 0.03, 1, 1])
     path = os.path.join(save_dir, '图7 各阶段残差.png')
     plt.savefig(path, dpi=300)
     plt.show()
@@ -203,7 +264,7 @@ def plot_residuals(stages, save_dir):
 def main():
     """独立运行：检测节点 → 三段建模 → 画图6+图7"""
     print("=" * 55)
-    print("Three-stage Deformation Modeling")
+    print("三段式形变建模")
     print("=" * 55)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -216,22 +277,22 @@ def main():
     idx1, t1, idx2, t2 = sliding_window_detect()
 
     if idx1 is None or idx2 is None:
-        print("\n[WARN] Sliding window failed, trying MAD+persistence...")
+        print("\n[警告] 滑动窗口法失败，尝试MAD+持久性法...")
         from detect_nodes import mad_persistence_detect
         idx1, t1, idx2, t2 = mad_persistence_detect()
 
     if idx1 is None or idx2 is None:
-        print("\n[ERROR] Both methods failed to identify nodes")
+        print("\n[错误] 两种检测方法均未能识别节点")
         return
 
-    print(f"\nUsing nodes: Node1=#{idx1} (t={t1/24:.2f}d), Node2=#{idx2} (t={t2/24:.2f}d)")
+    print(f"\n使用节点: 节点1=#{idx1} (t={t1/24:.2f}d), 节点2=#{idx2} (t={t2/24:.2f}d)")
     stages = modeling_with_nodes(idx1, idx2)
 
     # 汇总表
     print("\n" + "=" * 55)
-    print("Stage Summary")
+    print("阶段汇总")
     print("-" * 55)
-    print(f"{'Stage':<8} {'Model':<12} {'R²':>8} {'RMSE(mm)':>10} {'Mean Vel(mm/h)':>16}")
+    print(f"{'阶段':<8} {'模型':<12} {'R²':>8} {'RMSE(mm)':>10} {'平均速度(mm/h)':>16}")
     print("-" * 55)
     for label in ["I", "II", "III"]:
         s = stages[label]
