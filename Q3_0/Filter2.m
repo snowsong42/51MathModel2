@@ -1,108 +1,66 @@
 %% ============================================================
-% 探查脚本 v2：基于傅里叶分析的平稳波动信号去噪探索
-% 适用于：围绕中心值上下波动的位移类信号
-% 数据文件：Attachment 3.xlsx（训练集 Sheet）
+% 降噪效果检查脚本：频谱对比 + 信噪比输出
+% 读取 Filtered_Result.csv，含三列：SerialNo, RawDisplacement, FilteredDisplacement
 % ============================================================
 clear; clc; close all;
 
-%% ---- 1. 读取并准备数据 ----
-filename = 'Attachment 3.xlsx';
-sheetName = '训练集';
-opts = detectImportOptions(filename, 'Sheet', sheetName);
-opts.VariableNamingRule = 'preserve';
-dataTable = readtable(filename, opts, 'Sheet', sheetName);
+%% ---- 1. 读取数据 ----
+filename = 'Filtered_Result.csv';
+data = readtable(filename);
+raw = data.RawDisplacement;
+filtered = data.FilteredDisplacement;
 
-serialNo = dataTable{:, 1};          % 序号/时间戳
-rawDisplacement = dataTable{:, 5};   % 表面位移（第6列）
+% 去除缺失值（以防万一）
+valid = ~isnan(raw) & ~isnan(filtered);
+raw = raw(valid);
+filtered = filtered(valid);
+N = length(raw);
+fprintf('有效数据点数：%d\n', N);
 
-N = length(rawDisplacement);
+%% ---- 2. 计算信噪比 ----
+residual = raw - filtered;
+SNR = 20 * log10(std(raw) / std(residual));
+fprintf('信噪比 SNR = %.2f dB\n', SNR);
 
-% ---- 基本插值（处理零值与NaN）----
-x = rawDisplacement;
-x(x == 0) = NaN;  % 将0统一视为缺失（可调整）
-validMask = ~isnan(x);
-x_interp = interp1(find(validMask), x(validMask), 1:N, 'linear', 'extrap');
-% 确保列向量
-x_interp = x_interp(:);
+%% ---- 3. 功率谱估计与绘图 ----
+% 设定 Welch 谱估计参数
+window = min(256, N);
+noverlap = round(window/2);
+nfft = 1024;
 
-%% ---- 2. 频谱探查（决定后续滤波器参数） ----
-% 去均值以消除直流分量对频谱的污染
-x_detrend = x_interp - mean(x_interp);
+% 降噪前功率谱
+[Pxx_raw, f] = pwelch(raw - mean(raw), hamming(window), noverlap, nfft, 1);
 
-% Welch法功率谱估计（比直接FFT更平滑）
-[Pxx, f] = pwelch(x_detrend, hamming(256), 128, 1024, 1);  
-% 假设采样间隔为1（时间序号），频率单位：周期/序号
+% 降噪后功率谱
+[Pxx_filt, ~] = pwelch(filtered - mean(filtered), hamming(window), noverlap, nfft, 1);
 
-figure('Position', [100, 100, 1000, 500]);
-semilogy(f, Pxx, 'b-', 'LineWidth', 1.5);
+% 绘制降噪前频谱
+figure('Position', [100, 100, 800, 500]);
+semilogy(f, Pxx_raw, 'b-', 'LineWidth', 1.5);
 xlabel('频率 (周期/序号)'); ylabel('功率谱密度');
-title('功率谱密度估计 —— 平稳波动信号的能量分布');
+title(sprintf('降噪前功率谱 (SNR = %.2f dB)', SNR));
 grid on;
+%saveas(gcf, 'before_denoise_psd.png');
+%fprintf('降噪前频谱图已保存至 before_denoise_psd.png\n');
 
-% 自动标注能量最大的前三个频率峰（帮助你定位周期成分）
-[~, locs] = findpeaks(Pxx, f, 'SortStr', 'descend', 'NPeaks', 3);
-hold on;
-plot(locs, interp1(f, Pxx, locs), 'ro', 'MarkerSize', 8, 'LineWidth', 1.5);
-text(locs, interp1(f, Pxx, locs), arrayfun(@(x) sprintf('%.3f', x), locs, ...
-    'UniformOutput', false), 'VerticalAlignment', 'bottom');
-legend('功率谱密度', '主要峰值频率');
+% 绘制降噪后频谱
+figure('Position', [100, 100, 800, 500]);
+semilogy(f, Pxx_filt, 'r-', 'LineWidth', 1.5);
+xlabel('频率 (周期/序号)'); ylabel('功率谱密度');
+title(sprintf('降噪后功率谱 (SNR = %.2f dB)', SNR));
+grid on;
+%saveas(gcf, 'after_denoise_psd.png');
+%fprintf('降噪后频谱图已保存至 after_denoise_psd.png\n');
 
-%% ---- 3. 基于频谱观察的低通/带通滤波器设计 ----
-% 
-% 请根据上一步绘制的功率谱图，在这里手工设定截止频率。
-% 例：若主要周期成分频率 < 0.1，噪声在 >0.2，
-% 则可设置低通截止频率 fc = 0.15
-%
-% 这里提供三种可选方案，请取消注释你需要的那一种：
-% --------------------------------------------------------
+% 可选：叠加对比图
+figure('Position', [100, 100, 800, 500]);
+semilogy(f, Pxx_raw, 'b-', 'LineWidth', 1.2); hold on;
+semilogy(f, Pxx_filt, 'r-', 'LineWidth', 1.2);
+xlabel('频率 (周期/序号)'); ylabel('功率谱密度');
+title(sprintf('频谱对比 (SNR = %.2f dB)', SNR));
+legend('降噪前', '降噪后');
+grid on;
+%saveas(gcf, 'spectrum_comparison.png');
+%fprintf('频谱对比图已保存至 spectrum_comparison.png\n');
 
-% ----- 方案A：简单低通（默认） -----
-fc = 0.05;          % 截止频率（根据频谱修改）
-[b, a] = butter(6, fc/(0.5), 'low');
-x_filtered = filtfilt(b, a, x_interp);
-
-% ----- 方案B：带通滤波（若已知有用频带） -----
-% f_low = 0.02; f_high = 0.15;
-% [b, a] = butter(4, [f_low f_high]/(0.5), 'bandpass');
-% x_filtered = filtfilt(b, a, x_interp);
-
-% ----- 方案C：基于阈值的小波重建（备选） -----
-% 使用 wdenoise 的效果也可以一并对比
-x_wavelet = wdenoise(x_interp(:));
-x_wavelet = x_wavelet(:);
-
-%% ---- 4. 时域效果对比 ----
-figure('Position', [100, 100, 1400, 900]);
-
-subplot(3,1,1);
-plot(serialNo, x_interp, 'Color', [0.7 0.7 0.7], 'LineWidth', 0.8); hold on;
-plot(serialNo, x_filtered, 'r-', 'LineWidth', 1.2);
-title('低通/带通频域滤波效果');
-xlabel('Serial No.'); ylabel('位移 (mm)');
-legend('插值后', '频域滤波'); grid on;
-
-subplot(3,1,2);
-plot(serialNo, x_interp, 'Color', [0.7 0.7 0.7], 'LineWidth', 0.8); hold on;
-plot(serialNo, x_wavelet, 'b-', 'LineWidth', 1.2);
-title('小波去噪对比');
-xlabel('Serial No.'); ylabel('位移 (mm)');
-legend('插值后', '小波去噪'); grid on;
-
-subplot(3,1,3);
-plot(serialNo, rawDisplacement, 'k-', 'LineWidth', 0.5); hold on;
-plot(serialNo, x_filtered, 'r-', 'LineWidth', 1.5);
-title('原始数据 vs 频域滤波结果');
-xlabel('Serial No.'); ylabel('位移 (mm)');
-legend('原始', '频域滤波'); grid on;
-
-sgtitle('基于傅里叶分析的平稳信号去噪探查');
-
-%% ---- 5. 滤波残差与信噪比 ----
-res = x_interp - x_filtered;
-snr_freq = 20 * log10(std(x_interp) / std(res));
-fprintf('频域滤波 SNR = %.2f dB\n', snr_freq);
-
-% 若同时运行了小波去噪，也可计算小波SNR
-res_w = x_interp - x_wavelet;
-snr_wav = 20 * log10(std(x_interp) / std(res_w));
-fprintf('小波去噪 SNR = %.2f dB\n', snr_wav);
+disp('全部检查完成。');
