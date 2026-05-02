@@ -6,14 +6,15 @@
 clear; clc; close all;
 
 %% ---- 1. 读取并准备数据 ----
-filename = 'Attachment 3.xlsx';
+filename = 'ap4.xlsx';
 sheetName = '训练集';
 opts = detectImportOptions(filename, 'Sheet', sheetName);
 opts.VariableNamingRule = 'preserve';
 dataTable = readtable(filename, opts, 'Sheet', sheetName);
 
-serialNo = dataTable{:, 1};          % 序号/时间戳
-rawDisplacement = dataTable{:, 5};   % 表面位移（第6列）
+N = height(dataTable);
+serialNo = (1:N)';                     % 序列序号：1,2,3,...
+rawDisplacement = dataTable{:, 2};   % 表面位移（第2列）
 
 N = length(rawDisplacement);
 
