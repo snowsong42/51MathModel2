@@ -1,27 +1,23 @@
-"""中文绘图工具"""
+"""绘图工具（Q4_LGBM 版）"""
 
-import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import os
+
+# 阶段颜色和标签（全局共享）
+COLORS = {0: 'green', 1: 'orange', 2: 'red'}
+PHASE_LABELS = {0: '缓慢变形', 1: '加速变形', 2: '快速变形'}
+
 
 def setup_zh():
-    """配置中文字体"""
+    """设置中文字体"""
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
-    for f in ['SimHei','Microsoft YaHei','WenQuanYi Micro Hei','DejaVu Sans']:
-        try:
-            plt.rcParams['font.sans-serif'] = [f]
-            fig = plt.figure(); fig.text(.5,.5,'测试'); plt.close(fig)
-            return
-        except: pass
 
-def save_dir(base='Q5/结果与使用指南'):
-    """创建并返回图表保存目录"""
-    d = os.path.join(base, '图表')
-    os.makedirs(d, exist_ok=True)
-    return d
 
-def phase_name(pid):
-    return {0:'缓慢变形',1:'加速变形',2:'快速变形'}.get(pid, f'Phase{pid}')
+def save_dir(path):
+    """兼容旧接口（空函数）"""
+    pass
 
-__all__ = ['setup_zh','save_dir','phase_name']
+
+def phase_name(ph):
+    """获取阶段中文名"""
+    return PHASE_LABELS.get(ph, f'Phase {ph}')
