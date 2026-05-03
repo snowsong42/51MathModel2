@@ -3,6 +3,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
+from scipy.signal import savgol_filter
 
 plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
@@ -33,7 +34,6 @@ test['e'] = test['e'].fillna(0)
 # ==================== 固定超参数（初始默认值） ====================
 TAU_R = 80          # 降雨衰减时间常数（点数）
 L_R   = 100         # 降雨窗口长度
-L_M   = 150         # 微震累积窗口长度
 BLAST_TAU = 100     # 爆破影响衰减时间常数（步数）
 
 # 孔压参数：基于训练集全局统计（确保实验集使用相同常数）
@@ -51,7 +51,7 @@ def exp_weighted_mean(series, tau):
     weights = np.exp(-np.arange(n)[::-1] / tau)   # 最新权重=1，最旧=exp(-(n-1)/tau)
     return np.average(series, weights=weights)
 
-def add_features(df, tau_r=TAU_R, L_r=L_R, L_m=L_M, P_crit=P_CRIT, P0_val=P0):
+def add_features(df, tau_r=TAU_R, L_r=L_R, P_crit=P_CRIT, P0_val=P0):
     df = df.copy()
     
     # 1. 有效入渗降雨量 R_eff（指数衰减滑动窗）
@@ -59,8 +59,8 @@ def add_features(df, tau_r=TAU_R, L_r=L_R, L_m=L_M, P_crit=P_CRIT, P0_val=P0):
                     .rolling(window=L_r, min_periods=1)
                     .apply(exp_weighted_mean, args=(tau_r,), raw=True))
     
-    # 2. 累积微震事件数 M_cum（简单滑动求和）
-    df['M_cum'] = df['c'].rolling(window=L_m, min_periods=1).sum()
+    # 2. 微震事件数 C_event（直接引用原始 c，不做累积）
+    df['C_event'] = df['c'].fillna(0)
     
     # 3. 孔压驱动项 P_drive
     df['P_drive'] = np.maximum(0, df['b'] - P_crit) * (df['b'] / P0_val)
@@ -88,26 +88,74 @@ def add_features(df, tau_r=TAU_R, L_r=L_R, L_m=L_M, P_crit=P_CRIT, P0_val=P0):
 train_feat = add_features(train)
 test_feat  = add_features(test)
 
-# ==================== 归一化（训练集 fit，实验集 transform） ====================
-norm_cols = ['R_eff', 'P_drive', 'M_cum', 'BlastMem']
-scaler = StandardScaler()
+# ==================== ΔSD 分阶段 SG 滤波 ====================
+# （在归一化之前对原始 ΔSD 进行滤波，去除测量噪声）
+print(f"\n===== ΔSD 分阶段 SG 滤波 =====")
+SG_CONFIG = {
+    1: dict(window_length=51, polyorder=3),
+    2: dict(window_length=21, polyorder=3),
+    3: dict(window_length=15, polyorder=3),
+}
+for seg in [1, 2, 3]:
+    cfg = SG_CONFIG[seg]
+    win, poly = cfg['window_length'], cfg['polyorder']
+    mask_tr = train_feat['Stage'] == seg
+    mask_te = test_feat['Stage'] == seg
+    delta_tr = train_feat.loc[mask_tr, 'Delta_SD'].values
+    if len(delta_tr) >= win:
+        train_feat.loc[mask_tr, 'Delta_SD'] = savgol_filter(delta_tr, win, poly)
+    n_tr = len(delta_tr)
+    # 实验集滤波（如有 ΔSD）
+    if mask_te.sum() > 0:
+        delta_te = test_feat.loc[mask_te, 'Delta_SD'].values
+        if not np.all(np.isnan(delta_te)) and len(delta_te) >= win:
+            test_feat.loc[mask_te, 'Delta_SD'] = savgol_filter(delta_te, win, poly)
+    print(f"  阶段 {seg} (窗口={win}, 阶数={poly}): 训练集 {n_tr} 样本 → 已完成")
+print(f"===== ΔSD SG 滤波完成 =====\n")
+
+# ==================== 分阶段归一化（每个阶段单独拟合 scaler） ====================
+norm_cols = ['R_eff', 'P_drive', 'C_event', 'BlastMem']
+norm_cols_norm = [c + '_norm' for c in norm_cols]
 train_feat_norm = train_feat.copy()
 test_feat_norm = test_feat.copy()
 
-train_feat_norm[[c + '_norm' for c in norm_cols]] = scaler.fit_transform(train_feat[norm_cols].values)
-test_feat_norm[[c + '_norm' for c in norm_cols]] = scaler.transform(test_feat[norm_cols].values)
-
-print(f"\n归一化完成（训练集 fit，实验集使用相同参数）")
-for j, col in enumerate(norm_cols):
-    print(f"  {col}: mean = {scaler.mean_[j]:.6f}, std = {scaler.scale_[j]:.6f}")
+scaler_params_list = []
+print(f"\n===== 分阶段归一化 =====")
+for seg in [1, 2, 3]:
+    mask_train = train_feat['Stage'] == seg
+    mask_test  = test_feat['Stage'] == seg
+    
+    # 该阶段有数据时才拟合
+    if mask_train.sum() == 0:
+        print(f"  [警告] 阶段 {seg} 训练集无数据，跳过")
+        for col in norm_cols_norm:
+            train_feat_norm.loc[mask_train, col] = 0.0
+            test_feat_norm.loc[mask_test, col] = 0.0
+        continue
+    
+    scaler_seg = StandardScaler()
+    train_feat_norm.loc[mask_train, norm_cols_norm] = scaler_seg.fit_transform(
+        train_feat.loc[mask_train, norm_cols].values)
+    test_feat_norm.loc[mask_test, norm_cols_norm] = scaler_seg.transform(
+        test_feat.loc[mask_test, norm_cols].values)
+    
+    print(f"  阶段 {seg} 归一化参数（训练集 μ, σ）：")
+    for j, col in enumerate(norm_cols):
+        print(f"    {col}: mean = {scaler_seg.mean_[j]:.6f}, std = {scaler_seg.scale_[j]:.6f}")
+        scaler_params_list.append({
+            'Stage': seg,
+            'Feature': col,
+            'Mean': scaler_seg.mean_[j],
+            'Std': scaler_seg.scale_[j],
+        })
 
 # ==================== 整理输出列 ====================
 cols_out = [
     'Time', 'Stage',          # 时间、阶段
     'a', 'b', 'c', 'd', 'e',  # 原始五维特征
     'BlastMem',               # 爆破连续记忆量（指数衰减递推）
-    'R_eff', 'M_cum', 'P_drive',  # 降雨滞后、微震累积、孔压驱动
-    'R_eff_norm', 'P_drive_norm', 'M_cum_norm', 'BlastMem_norm',  # 归一化（z-score）
+    'R_eff', 'C_event', 'P_drive',  # 降雨滞后、微震事件数（瞬时）、孔压驱动
+    'R_eff_norm', 'P_drive_norm', 'C_event_norm', 'BlastMem_norm',  # 归一化（z-score）
     'SD', 'Delta_SD'          # 位移（原始+增量目标）
 ]
 
@@ -118,13 +166,9 @@ test_out  = test_feat_norm[cols_out]
 with pd.ExcelWriter(output_path) as writer:
     train_out.to_excel(writer, sheet_name='train', index=False)
     test_out.to_excel(writer, sheet_name='test', index=False)
-    # 保存归一化参数
-    scaler_params = pd.DataFrame({
-        'Feature': norm_cols,
-        'Mean': scaler.mean_,
-        'Std': scaler.scale_,
-    })
-    scaler_params.to_excel(writer, sheet_name='scaler_params', index=False)
+    # 保存分阶段归一化参数
+    scaler_params_df = pd.DataFrame(scaler_params_list)
+    scaler_params_df.to_excel(writer, sheet_name='scaler_params', index=False)
 print("特征构造完成，已保存至 ./ap4_features.xlsx（含 scaler_params sheet）")
 
 # ==================== 分段输出 3 个 xlsx ====================
@@ -187,9 +231,9 @@ draw_compare('R_eff', 'a', 'R_eff',
 draw_compare('P_drive', 'b', 'P_drive',
              '原始孔压', '孔压驱动 P_drive', 'kPa', 'kPa')
 
-# 图③：c ↔ M_cum
-draw_compare('M_cum', 'c', 'M_cum',
-             '原始微震事件数', '累积微震 M_cum', 'count', 'count')
+# 图③：c ↔ C_event（蓝色线 = 原始 c，红色线 = C_event_norm = 瞬时微震事件数归一化）
+draw_compare('C_event', 'c', 'C_event',
+             '原始微震事件数', '微震事件数 C_event', 'count', 'count')
 
 # 图④：爆破对比图（BlastMem + 爆破事件标注距离）
 fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)

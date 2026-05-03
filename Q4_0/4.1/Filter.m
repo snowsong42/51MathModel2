@@ -43,7 +43,7 @@ waveletDenoised = waveletDenoised(:);
 
 %% ---- 5. Savitzky‑Golay 滤波（趋势平滑） ----
 order = 2;        % 多项式阶数（常用 2-4）
-framelen = 21;    % 窗口长度（必须为奇数，典型值 7-21）
+framelen = 27;    % 窗口长度（必须为奇数，典型值 7-21）
 sgFiltered = sgolayfilt(waveletDenoised, order, framelen);
 
 %% ---- 6. 绘制对比图 ----

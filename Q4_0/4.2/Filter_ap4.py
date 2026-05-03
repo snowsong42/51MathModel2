@@ -88,7 +88,7 @@ def process_column(series, smooth_params=None, bypass=False):
 col_params = {
     'a': dict(window_std=600, base_radius=10, sharp_radius=0.1),   # 降雨量：保留脉冲起落
     'b': dict(window_std=60, base_radius=10, sharp_radius=0.1),   # 孔压：缓变，适度平滑
-    'c': {},  # 不做平滑，仅插值补 NaN
+    'c': dict(window_std=60, base_radius=10, sharp_radius=20),   # 微震事件数：只插值补 NaN，不平滑（bypass=True）
 }
 
 # ===== 数据读取与处理 =====
@@ -106,7 +106,7 @@ for sheet_name, df in [("训练集", df_train), ("实验集", df_exp)]:
         series = pd.to_numeric(df_out[col], errors='coerce')
         params = col_params.get(col, {})
         # 微震事件数（c）只做插值补 NaN，不做平滑/滤波，保留原始细节
-        bypass = (col == 'c')
+        bypass = 0
         filled, smooth = process_column(series, smooth_params=params, bypass=bypass)
         df_out[col] = smooth
     results[sheet_name] = df_out
