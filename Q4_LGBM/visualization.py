@@ -77,8 +77,15 @@ if 'Displacement' in test_feat.columns:
     del test_feat['Displacement']
 
 # 实验集阶段标签（来源于原始数据）
-test_df_reload, _ = load_data()
-if 'Phase' not in test_feat.columns:
+# test_df_reload 直接用 test_df_raw（已在上面从 load_data 获得）
+if 'Phase' in test_df_raw.columns and '^2' not in test_feat.columns:
+    test_feat['Phase'] = test_df_raw['Phase'].values
+    print(f"实验集 Phase 标签分布: {test_feat['Phase'].value_counts().to_dict()}")
+else:
+    print("警告: test_df_raw 中无 Phase 列，尝试其他方法...")
+    # 如果 test_df_raw 也没有 Phase（可能是训练集错误指代）
+    # 用 test_df_reload 正确获取
+    _, test_df_reload = load_data()
     test_feat['Phase'] = test_df_reload['Phase'].values
 
 # 确定特征列
