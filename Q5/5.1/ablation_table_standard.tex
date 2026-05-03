@@ -1,0 +1,26 @@
+\begin{table}[htbp]
+	\centering
+	\caption{消融实验结果 (Ablation Study Results)}
+	\label{tab:ablation}
+	\begin{tabular}{|c|c|c|c|c|c|c|c|c|}
+		\hline
+		\multirow{2}{*}{模型名称} & \multicolumn{6}{c|}{变量组合} & \multirow{2}{*}{$R^{2}$} & \multirow{2}{*}{RMSE} \\
+		\cline{2-7}
+		& 降雨量 & 孔隙水压力 & 微震事件数 & 干湿入渗系数 & 爆破点距离 & 单段最大药量 & & \\
+		\hline
+		全特征模型 (Baseline) & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 0.6062 & 0.6270 \\
+		\hline
+		剔除降雨量 & $\times$ & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & 0.6073 & 0.6270 \\
+		\hline
+		剔除孔隙水压力 & \checkmark & $\times$ & \checkmark & \checkmark & \checkmark & \checkmark & 0.5931 & 0.6382 \\
+		\hline
+		剔除微震事件数 & \checkmark & \checkmark & $\times$ & \checkmark & \checkmark & \checkmark & 0.6017 & 0.6314 \\
+		\hline
+		剔除干湿入渗系数 & \checkmark & \checkmark & \checkmark & $\times$ & \checkmark & \checkmark & 0.5808 & 0.6478 \\
+		\hline
+		剔除爆破点距离 & \checkmark & \checkmark & \checkmark & \checkmark & $\times$ & \checkmark & 0.5971 & 0.6351 \\
+		\hline
+		剔除单段最大药量 & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & $\times$ & 0.5932 & 0.6381 \\
+		\hline
+	\end{tabular}
+\end{table}
