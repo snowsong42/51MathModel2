@@ -217,7 +217,7 @@ b_train = trainRaw{:, col_pwp_idx};
 c_train = trainRaw{:, col_mec_idx};
 d_train = trainRaw{:, col_bpd_idx};
 e_train = trainRaw{:, col_mcs_idx};
-SD_train = trainRaw{:, col_sd_idx};
+SD_train = x_fact;  % 使用滤波后的位移作为训练集的 SD 列
 
 % 从 V_A_filtered.csv 读取速度
 v_data = readtable('V_A_filtered.csv');
