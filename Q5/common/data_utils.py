@@ -16,11 +16,19 @@ def find_data(start_dir='.'):
     return None
 
 def map_columns(df):
-    """中文列名 → 英文标准化"""
-    rules = [('时间','Time'),('表面位移','Displacement'),('降雨','Rainfall'),
-             ('孔隙','PorePressure'),('微震','Microseismic'),('入渗','Infiltration'),
-             ('爆破','BlastDist'),('距离','BlastDist'),('单段','BlastCharge'),
-             ('药量','BlastCharge'),('最大','BlastCharge')]
+    """中/英文列名 → 标准化短名"""
+    rules = [
+        ('时间','Time'),('表面位移','Displacement'),('降雨','Rainfall'),
+        ('孔隙','PorePressure'),('微震','Microseismic'),('入渗','Infiltration'),
+        ('爆破','BlastDist'),('距离','BlastDist'),('单段','BlastCharge'),
+        ('药量','BlastCharge'),('最大','BlastCharge'),
+        # 英文全名匹配
+        ('Time','Time'),('Surface Displacement','Displacement'),
+        ('Rainfall','Rainfall'),('Pore Water Pressure','PorePressure'),
+        ('Microseismic','Microseismic'),('Dry-Wet Infiltration','Infiltration'),
+        ('Blasting Point Distance','BlastDist'),
+        ('Maximum Charge per Segment','BlastCharge'),
+    ]
     col_map = {}
     for c in df.columns:
         s = str(c)
@@ -144,7 +152,7 @@ def label_phase(df, b1, b2):
 def load_pipeline(path=None):
     """一站式加载: path → DataFrame(已清洗+特征+阶段)"""
     if path is None:
-        path = find_data(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        path = os.path.join(os.path.dirname(__file__), 'Attachment 5.xlsx')
     df = pd.read_excel(path)
     df = map_columns(df)
     df = clean(df)

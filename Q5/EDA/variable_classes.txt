@@ -1,0 +1,5 @@
+continuous: Infiltration, PorePressure
+rainfall: Rainfall, Rainfall_cum24, Rainfall_lag, Rainfall_lag78, Time_since_rain
+microseismic: Microseismic, Microseismic_lag, Microseismic_lag24, Microseismic_roll6
+blast: BlastCharge, BlastCharge_lag, BlastCharge_lag60, BlastDist, BlastDist_lag, BlastDist_lag60, Blast_Energy, Blast_PPV, Time_since_blast
+target: Delta_D, Disp_cum24, Displacement
