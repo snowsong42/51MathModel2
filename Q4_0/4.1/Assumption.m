@@ -181,3 +181,87 @@ fprintf('均方根误差 RMSE : %.4f mm\n', RMSE);
 fprintf('平均绝对误差 MAE : %.4f mm\n', MAE);
 fprintf('最大绝对残差     : %.4f mm\n', max(abs(residual_disp)));
 
+%% ============================================================
+% [新增] 统一输出 ap4_stage.xlsx
+% 功能：① 给训练集标注阶段 ② Time转序列号
+%       ③ 添加速度 ④ 统一列名 ⑤ 输出双sheet
+% ============================================================
+
+%% ---- 1. 读取原始训练集数据 ----
+trainRaw = readtable('Attachment 4.xlsx', 'Sheet', '训练集');
+N_train = height(trainRaw);
+
+% 标注阶段 (利用已有的 cp_idx 拐点)
+stage_train = zeros(N_train, 1);
+stage_train(seg1) = 1;
+stage_train(seg2) = 2;
+stage_train(seg3) = 3;
+
+% Time 转序列号
+time_serial_train = (1:N_train)';
+
+% 提取各列 (按照原列名顺序)
+% 原列名: Time, Surface Displacement (mm), Rainfall (mm), Pore Water Pressure (kPa),
+%         Microseismic Event Count, Blasting Point Distance (m), Maximum Charge per Segment (kg)
+% 映射: a=Rainfall, b=Pore Water Pressure, c=Microseismic Event Count,
+%       d=Blasting Point Distance, e=Maximum Charge per Segment, SD=Surface Displacement
+col_rainfall_idx   = 3;  % Rainfall (mm)
+col_pwp_idx        = 4;  % Pore Water Pressure (kPa)
+col_mec_idx        = 5;  % Microseismic Event Count
+col_bpd_idx        = 6;  % Blasting Point Distance (m)
+col_mcs_idx        = 7;  % Maximum Charge per Segment (kg)
+col_sd_idx         = 2;  % Surface Displacement (mm)
+
+a_train = trainRaw{:, col_rainfall_idx};
+b_train = trainRaw{:, col_pwp_idx};
+c_train = trainRaw{:, col_mec_idx};
+d_train = trainRaw{:, col_bpd_idx};
+e_train = trainRaw{:, col_mcs_idx};
+SD_train = x_fact;  % 使用滤波后的位移作为训练集的 SD 列
+
+% 从 V_A_filtered.csv 读取速度
+v_data = readtable('V_A_filtered.csv');
+V_train = v_data.Velocity_mm_min;
+
+% 构建训练集表格 (统一列名)
+train_out = table(time_serial_train, stage_train, a_train, b_train, c_train, d_train, e_train, SD_train, V_train, ...
+    'VariableNames', {'Time', 'Stage', 'a', 'b', 'c', 'd', 'e', 'SD', 'V'});
+
+%% ---- 2. 读取实验集数据 ----
+expRaw = readtable('Attachment 4.xlsx', 'Sheet', '实验集');
+N_exp = height(expRaw);
+
+% 实验集已有 Stage Label 列，列顺序为: Time, Stage Label, Surface Displacement (mm),
+% Rainfall (mm), Pore Water Pressure (kPa), Microseismic Event Count,
+% Blasting Point Distance (m), Maximum Charge per Segment (kg)
+% Time 转序列号
+time_serial_exp = (1:N_exp)';
+
+% 提取实验集 Stage
+stage_exp = expRaw{:, 2};  % Stage Label 列 (第2列)
+
+% 提取 a,b,c,d,e
+a_exp = expRaw{:, 4};  % Rainfall (mm) 第4列
+b_exp = expRaw{:, 5};  % Pore Water Pressure (kPa) 第5列
+c_exp = expRaw{:, 6};  % Microseismic Event Count 第6列
+d_exp = expRaw{:, 7};  % Blasting Point Distance (m) 第7列
+e_exp = expRaw{:, 8};  % Maximum Charge per Segment (kg) 第8列
+
+% 实验集 SD 和 V 留空 (NaN)
+SD_exp = NaN(N_exp, 1);
+V_exp = NaN(N_exp, 1);
+
+% 构建实验集表格
+exp_out = table(time_serial_exp, stage_exp, a_exp, b_exp, c_exp, d_exp, e_exp, SD_exp, V_exp, ...
+    'VariableNames', {'Time', 'Stage', 'a', 'b', 'c', 'd', 'e', 'SD', 'V'});
+
+%% ---- 3. 输出到 ap4_stage.xlsx ----
+outputFile = 'ap4_stage.xlsx';
+writetable(train_out, outputFile, 'Sheet', '训练集');
+writetable(exp_out, outputFile, 'Sheet', '实验集');
+fprintf('\n===== 已输出 %s =====\n', outputFile);
+fprintf('训练集 %d 行, 实验集 %d 行\n', N_train, N_exp);
+fprintf('列名: Time  Stage  a  b  c  d  e  SD  V\n');
+fprintf('其中 a=Rainfall, b=Pore Water Pressure, c=Microseismic Event Count,\n');
+fprintf('     d=Blasting Point Distance, e=Maximum Charge per Segment\n');
+fprintf('     SD=Surface Displacement, V=Velocity\n');
